@@ -1,0 +1,11 @@
+{
+  "name": "iHotel AV Scheduler",
+  "short_name": "AV Scheduler",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#F9F7F4",
+  "theme_color": "#10294B",
+  "icons": [
+    { "src": "https://raw.githubusercontent.com/avtechsatthei-blip/iHotel-messaging/47e5ffe5009cba1bd02177921396c4ad96984638/Ihotel%20Square.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
