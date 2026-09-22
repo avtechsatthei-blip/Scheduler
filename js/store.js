@@ -68,6 +68,26 @@
     );
   }
 
+  // A saved, reusable sign design: a client or brand logo plus matching colors. Shape matches the built-in
+  // themes in Sign.THEMES (bg/text/bar/strip/…) so it can be used anywhere a theme is used.
+  function newSignTheme(over) {
+    if (over) over = Object.fromEntries(Object.entries(over).filter(([, v]) => v !== undefined));
+    return Object.assign(
+      {
+        id: U.uid('sthm'), name: 'New design', bg: '#FFFFFF', text: '#10294B', shadow: null, weight: 500, roomWeight: 500,
+        bar: '#10294B', barLine: '#10294B', roomText: '#FFFFFF', strip: '#F15A32', stripLine: '#F15A32',
+        logo: null, rule: null, titleCy: 488, titleMaxH: null, ord: nextOrd(),
+      },
+      over || {}
+    );
+  }
+  // Recompute the layout fields (title position, accent rule) after the logo or strip color changes.
+  function laySignTheme(th) {
+    if (th.logo) { th.titleCy = 566; th.titleMaxH = 600; th.rule = { y: 240, w: 132, h: 6, color: th.strip }; }
+    else { th.titleCy = 488; th.titleMaxH = null; th.rule = null; }
+    return th;
+  }
+
   function baseState() {
     return {
       version: 1,
@@ -84,6 +104,7 @@
       inventory: INVENTORY_SEED.map(([name, qty, rentCost, category], i) => newItem({ name, qty, rentable: true, rentCost, category, ord: i })),
       events: [],
       audits: [], // monthly equipment audits
+      signThemes: [], // saved custom room-sign designs (logo + matching colors)
       schedules: {}, // weekKey -> { shifts:[], optionName, savedAt }
       meta: { firstRun: true, sampleLoaded: false },
     };
@@ -167,6 +188,8 @@
     listeners: [],
     newStaff,
     newItem,
+    newSignTheme,
+    laySignTheme,
     nextOrd,
     CONDITIONS,
     CATEGORIES,
@@ -198,6 +221,7 @@
       s.rooms.forEach((r, i) => { if (r.ord == null) r.ord = i; });
       if (saved.inventory) s.inventory = saved.inventory.map((x, i) => newItem(Object.assign({ ord: i }, x)));
       s.audits = (saved.audits || []).map((a) => Object.assign({ lines: [], extras: [], status: 'open' }, a));
+      s.signThemes = (saved.signThemes || []).map((x, i) => laySignTheme(newSignTheme(Object.assign({ ord: i }, x))));
       s.schedules = saved.schedules || {};
       s.meta = Object.assign({ firstRun: false }, saved.meta || {});
       return s;

@@ -36,7 +36,7 @@
         <div class="card pad"><h3>Defaults</h3><div class="form-grid" style="margin-top:12px">
           <div class="span-3 keep-half">${UI.field('New event starts', `<input class="in" type="time" value="${s.defaultStart}" data-change="set" data-key="defaultStart" data-kind="str">`, 'Also used when a PDF has no times')}</div>
           <div class="span-3 keep-half">${UI.field('New event ends', `<input class="in" type="time" value="${s.defaultEnd}" data-change="set" data-key="defaultEnd" data-kind="str">`)}</div>
-          <div class="span-4">${UI.field('Room sign style', `<select class="in" data-change="set" data-key="signTheme" data-kind="str">${Object.entries(IH.Sign.THEMES).map(([k, t]) => UI.opt(k, t.label, s.signTheme === k)).join('')}</select>`)}</div>
+          <div class="span-4">${UI.field('Room sign style', `<div class="row" style="gap:8px"><select class="in" data-change="set" data-key="signTheme" data-kind="str" style="flex:1">${IH.Sign.allThemes(Store.state).map((t) => UI.opt(t.key, t.label, s.signTheme === t.key)).join('')}</select><button type="button" class="btn ghost icon" data-act="sign-designs" title="Manage sign designs">${ic('sliders', 'sm')}</button></div>`, 'Custom designs (a logo with matching colors) are made from Room signs, or the button here')}</div>
           <div class="span-2" style="align-self:end"><label class="check"><input type="checkbox" ${s.signShowDate ? 'checked' : ''} data-change="set" data-key="signShowDate" data-kind="bool"> Date on signs</label></div></div></div>
         ${IH.Cloud.cardHtml()}
         <div class="card pad"><h3>Your data</h3>
@@ -59,6 +59,7 @@
     if (k === 'weekStart') { UI.weekKey = Store.weekKeyFor(UI.weekKey); UI.toast('Week start changed. Saved schedules from before stay under their old weeks.'); UI.rerender(); }
     else UI.toast('Saved', 'ok');
   };
+  UI.Acts['sign-designs'] = () => IH.SignDesigner.openManager(() => UI.rerender());
   UI.Acts['backup-dl'] = () => {
     Store.update((s) => { s.meta.lastBackup = Date.now(); });
     U.download(new Blob([Store.exportJSON()], { type: 'application/json' }), `ihotel-av-scheduler-backup_${U.today()}.json`);

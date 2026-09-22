@@ -101,6 +101,8 @@
     return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
   };
   U.slug = (s) => String(s || '').replace(/[^\w\-]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').slice(0, 60);
+  U.fileToDataURL = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error || new Error('Could not read the file')); r.readAsDataURL(file); });
+  U.loadImage = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Could not read that image')); i.src = src; });
   U.download = (blobOrUrl, name) => {
     const url = typeof blobOrUrl === 'string' ? blobOrUrl : URL.createObjectURL(blobOrUrl);
     const a = document.createElement('a');

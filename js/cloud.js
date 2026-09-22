@@ -136,9 +136,16 @@
     remove.forEach((k) => { o[k] = null; });
     return o;
   };
-  const applyLocal = (final) => {
+  const applyLocal = (final, resetWeek) => {
     applying = true;
     try { Store.replaceState(M.fromRecords(final, Store.state.meta)); } finally { applying = false; }
+    // Adopting a whole different dataset (not just a few merged changes): if the week on screen has
+    // nothing in it, jump to one that does, the same way the app picks a week on first load.
+    if (resetWeek && root.IH.UI && root.IH.UI.weekKey) {
+      try { sessionStorage.removeItem('ih-week'); } catch (e) { /* ignore */ }
+      root.IH.UI.weekKey = root.IH.UI.defaultWeek();
+      root.IH.UI.render();
+    }
   };
   const done = (final) => {
     saveBase(final);
@@ -156,11 +163,11 @@
         await ref.update(toUpdate(L, []));
         return done(L);
       }
-      if (M.isPristine(Store.state)) { applyLocal(R); return done(R); }
+      if (M.isPristine(Store.state)) { applyLocal(R, true); return done(R); }
       const strip = (m) => Object.fromEntries(Object.entries(m).filter(([k]) => !/^(settings|meta)\//.test(k)));
       if (!M.differs(strip(L), strip(R))) { done(R); return; }
       const choice = await chooseSource(L, R);
-      if (choice === 'cloud') { applyLocal(R); return done(R); }
+      if (choice === 'cloud') { applyLocal(R, true); return done(R); }
       if (choice === 'local') {
         const remove = Object.keys(R).filter((k) => !(k in L));
         await ref.update(toUpdate(L, remove));

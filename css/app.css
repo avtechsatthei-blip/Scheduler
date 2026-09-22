@@ -428,3 +428,22 @@ kbd { background: #fff; border: 1px solid var(--line); border-bottom-width: 2px;
 .namebtn:hover { text-decoration: underline; text-underline-offset: 3px; }
 .side-foot .cs { display: flex; align-items: center; margin-bottom: 6px; }
 .fbar select.in { min-width: 150px; }
+
+/* ---------------- sign designer ---------------- */
+.sdes-logo { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.logopv { width: 160px; height: 100px; border: 1.5px dashed var(--line); border-radius: 10px; display: flex; align-items: center; justify-content: center; background: #fff; flex: none; padding: 8px; }
+.logopv img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.cfield { display: flex; flex-direction: column; gap: 5px; }
+.cf-label { font-size: 11.5px; font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: 0.04em; }
+.cf-input { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 9px; padding: 4px 8px; background: #fff; }
+.cf-input input[type=color] { width: 26px; height: 26px; border: 0; padding: 0; background: none; border-radius: 6px; cursor: pointer; }
+.cf-input .hexin { border: 0; width: 78px; font: 600 12.5px ui-monospace, Menlo, Consolas, monospace; color: var(--ink); background: none; padding: 0; }
+.cf-input .hexin:focus { outline: none; }
+.swatches.sm button { width: 22px; height: 22px; box-shadow: 0 0 0 1px var(--line); }
+.swatches.sm:empty { display: none; }
+.themerow { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--line-2); }
+.themerow:last-child { border-bottom: 0; }
+.sign-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; color: var(--navy); background: var(--orange-soft); border-radius: 99px; padding: 1px 8px; margin-left: 6px; }
+.signrow { position: relative; }
+.signrow .rowbtn { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
+.signrow .rowbtn:hover { background: #efece5; color: var(--navy); }

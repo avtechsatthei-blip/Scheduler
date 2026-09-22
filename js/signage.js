@@ -25,26 +25,114 @@
       label: 'Hotel Illinois (U of I)',
       bg: '#FFFFFF', text: '#10294B', shadow: null, weight: 600, roomWeight: 600,
       bar: '#10294B', barLine: '#10294B', roomText: '#FFFFFF', strip: '#F15A32', stripLine: '#F15A32',
-      logo: { h: 132, y: 62 }, rule: { y: 240, w: 132, h: 6, color: '#F15A32' }, titleCy: 566, titleMaxH: 600,
+      logo: IH.LOGO ? { h: 132, y: 62, src: IH.LOGO.src } : null, rule: { y: 240, w: 132, h: 6, color: '#F15A32' }, titleCy: 566, titleMaxH: 600,
     },
   };
 
-  Sign._logo = null;
-  // Load fonts and the logo image before drawing. In Node pass { loadImage } (from the canvas package).
-  Sign.ready = async (opts) => {
+  // A theme's logo, keyed by its own src, so any number of custom logos (or per-sign one-off logos) can be
+  // preloaded and drawn side by side. { src: HTMLImageElement | node canvas Image }
+  Sign._logoCache = {};
+
+  Sign.loadFonts = async () => {
     if (typeof document !== 'undefined' && document.fonts && document.fonts.load) {
       try {
         await Promise.all([document.fonts.load('500 144px Montserrat'), document.fonts.load('600 144px Montserrat')]);
       } catch (e) { /* fall back to system font */ }
     }
-    if (IH.LOGO && !Sign._logo) {
+  };
+  // Decode and cache every logo image a theme (or list of themes) needs, before render() is called.
+  // In Node pass { loadImage } (from the canvas package).
+  Sign.preload = async (themes, opts) => {
+    const list = (Array.isArray(themes) ? themes : [themes]).filter(Boolean);
+    for (const th of list) {
+      const src = th && th.logo && th.logo.src;
+      if (!src || Sign._logoCache[src]) continue;
       try {
-        if (opts && opts.loadImage) Sign._logo = await opts.loadImage(IH.LOGO.src);
+        if (opts && opts.loadImage) Sign._logoCache[src] = await opts.loadImage(src);
         else if (typeof Image !== 'undefined') {
-          Sign._logo = await new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = IH.LOGO.src; });
+          Sign._logoCache[src] = await new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
         }
-      } catch (e) { Sign._logo = null; }
+      } catch (e) { Sign._logoCache[src] = null; }
     }
+  };
+  // Back-compat entry point: fonts plus the built-in U of I logo. New code should call preload() with the
+  // exact themes it is about to use.
+  Sign.ready = async (opts) => { await Sign.loadFonts(); await Sign.preload(Sign.THEMES.uofi, opts); };
+
+  // Resolve a theme reference to a real theme object. `key` is a built-in key ('classic'…), 'custom:<id>'
+  // (looked up in state.signThemes), or 'inline' (uses `inline` directly, a one-off theme that isn't saved).
+  Sign.resolveTheme = (state, key, inline) => {
+    if (key === 'inline' && inline) return inline;
+    if (typeof key === 'string' && key.indexOf('custom:') === 0) {
+      const id = key.slice(7);
+      const t = ((state && state.signThemes) || []).find((x) => x.id === id);
+      if (t) return t;
+    }
+    return Sign.THEMES[key] || Sign.THEMES.classic;
+  };
+  // Built-ins plus the saved library, as one list for dropdowns: [{key, label, theme, custom}].
+  Sign.allThemes = (state) => Object.entries(Sign.THEMES).map(([key, theme]) => ({ key, label: theme.label, theme, custom: false }))
+    .concat(((state && state.signThemes) || []).map((theme) => ({ key: `custom:${theme.id}`, label: theme.name, theme, custom: true })));
+
+  // Perceived brightness (0 dark – 1 light), for choosing readable text/room-name color against a fill.
+  Sign.luminance = (hex) => {
+    const n = parseInt(String(hex || '').replace('#', ''), 16);
+    if (isNaN(n)) return 1;
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  };
+  Sign.contrastOn = (hex) => (Sign.luminance(hex) > 0.6 ? '#1B2433' : '#FFFFFF');
+
+  // Sample the dominant colors in a logo image, ignoring near-white/near-black background. Returns up to
+  // `opts.count` swatches as { hex, sat, light }, most prominent and most colorful first.
+  Sign.extractPalette = (img, opts) => {
+    opts = opts || {};
+    const count = opts.count || 6;
+    const size = 60;
+    const canvas = opts.createCanvas ? opts.createCanvas(size, size) : Object.assign(document.createElement('canvas'), { width: size, height: size });
+    const ctx = canvas.getContext('2d');
+    const imgW = img.naturalWidth || img.width, imgH = img.naturalHeight || img.height;
+    if (!imgW || !imgH) return [];
+    const scale = Math.min(size / imgW, size / imgH);
+    const dw = Math.max(1, Math.round(imgW * scale)), dh = Math.max(1, Math.round(imgH * scale));
+    ctx.clearRect(0, 0, size, size);
+    ctx.drawImage(img, 0, 0, imgW, imgH, (size - dw) / 2, (size - dh) / 2, dw, dh);
+    const { data } = ctx.getImageData(0, 0, size, size);
+    const buckets = new Map(); // quantized rgb -> running totals
+    const step = 24;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i], g = data[i + 1], bch = data[i + 2], a = data[i + 3];
+      if (a < 128) continue; // transparent: not part of the mark
+      const max = Math.max(r, g, bch), min = Math.min(r, g, bch);
+      const light = (max + min) / 2 / 255;
+      if (light > 0.94 || light < 0.06) continue; // near-white or near-black background
+      const sat = max === min ? 0 : (max - min) / (255 - Math.abs(max + min - 255));
+      const key = [Math.round(r / step), Math.round(g / step), Math.round(bch / step)].join(',');
+      const b = buckets.get(key) || { count: 0, r: 0, g: 0, b: 0, sat: 0 };
+      b.count++; b.r += r; b.g += g; b.b += bch; b.sat += sat;
+      buckets.set(key, b);
+    }
+    let list = [...buckets.values()].map((b) => ({ r: Math.round(b.r / b.count), g: Math.round(b.g / b.count), b: Math.round(b.b / b.count), count: b.count, sat: b.sat / b.count }));
+    list.sort((a, b) => b.count * (0.35 + b.sat) - a.count * (0.35 + a.sat));
+    const hex = (c) => '#' + [c.r, c.g, c.b].map((v) => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+    const out = [];
+    for (const c of list) {
+      if (out.some((o) => Math.abs(o.r - c.r) + Math.abs(o.g - c.g) + Math.abs(o.b - c.b) < 66)) continue;
+      out.push(Object.assign({ hex: hex(c), light: (Math.max(c.r, c.g, c.b) + Math.min(c.r, c.g, c.b)) / 510 }, c));
+      if (out.length >= count) break;
+    }
+    return out;
+  };
+
+  // Turn extracted swatches into a starting theme: the most prominent color becomes the room bar (with a
+  // readable bar text color), the next distinct one becomes the strip, and title text uses the darkest
+  // swatch (falling back to navy so pale logos still read well on white).
+  Sign.paletteToTheme = (swatches) => {
+    const bar = (swatches[0] && swatches[0].hex) || '#10294B';
+    const strip = (swatches.find((s) => s.hex !== bar) || swatches[0] || { hex: '#F15A32' }).hex;
+    const darkest = swatches.slice().sort((a, b) => a.light - b.light)[0];
+    const text = darkest && darkest.light < 0.55 ? darkest.hex : (Sign.luminance(bar) < 0.55 ? bar : '#1B2433');
+    return { bar, barLine: bar, strip, stripLine: strip, text, roomText: Sign.contrastOn(bar) };
   };
 
   // Break text into `n` lines with the narrowest widest-line (keeps titles from ending in one stranded word).
@@ -101,19 +189,21 @@
     return ok[0];
   }
 
-  /** spec: { name, room, date?, start?, end? }   opts: { theme, showDate, createCanvas } */
+  /** spec: { name, room, date?, start?, end? }   opts: { theme (string key or a theme object), showDate, createCanvas } */
   Sign.render = (spec, opts) => {
     opts = opts || {};
-    const th = Sign.THEMES[opts.theme] || Sign.THEMES.classic;
+    const th = typeof opts.theme === 'string' ? (Sign.THEMES[opts.theme] || Sign.THEMES.classic) : opts.theme || Sign.THEMES.classic;
     const canvas = opts.createCanvas ? opts.createCanvas(Sign.W, Sign.H) : Object.assign(document.createElement('canvas'), { width: Sign.W, height: Sign.H });
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = th.bg;
     ctx.fillRect(0, 0, Sign.W, Sign.H);
 
-    // --- optional Hotel Illinois lockup + accent rule across the top
-    if (th.logo && Sign._logo) {
-      const lw = (th.logo.h * IH.LOGO.w) / IH.LOGO.h;
-      ctx.drawImage(Sign._logo, (Sign.W - lw) / 2, th.logo.y, lw, th.logo.h);
+    // --- optional logo + accent rule across the top
+    const logoImg = th.logo && Sign._logoCache[th.logo.src];
+    if (th.logo && logoImg) {
+      const natW = logoImg.naturalWidth || logoImg.width, natH = logoImg.naturalHeight || logoImg.height;
+      const lw = (th.logo.h * natW) / natH;
+      ctx.drawImage(logoImg, (Sign.W - lw) / 2, th.logo.y, lw, th.logo.h);
     }
     if (th.rule) {
       ctx.fillStyle = th.rule.color;
@@ -166,6 +256,17 @@
     ctx.fillText(spec.room || '', 12, 1004 - (132 - rs) * 0.1);
     ctx.shadowColor = 'transparent';
     return canvas;
+  };
+
+  // A per-sign override: { title?, room?, themeKey?, inline? }. Any of these can be set independently —
+  // e.g. a renamed sign that still uses the shared theme, or a custom look with the event's own name.
+  Sign.hasOverride = (ov) => !!ov && !!(ov.title || ov.room || ov.themeKey);
+  // Apply one event/sign's override on top of its default spec + the shared theme, ready to render.
+  Sign.forSpec = (state, spec, override, fallbackThemeKey) => {
+    const out = override && override.title ? Object.assign({}, spec, { name: override.title }) : spec;
+    const out2 = override && override.room ? Object.assign({}, out, { room: override.room }) : out;
+    const themeKey = (override && override.themeKey) || fallbackThemeKey;
+    return { spec: out2, theme: Sign.resolveTheme(state, themeKey, override && override.inline) };
   };
 
   Sign.toBlob = (canvas) => new Promise((res) => canvas.toBlob(res, 'image/png'));

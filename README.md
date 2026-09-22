@@ -45,7 +45,9 @@ All numbers are in **Settings**.
 ## Room signs and PowerPoint
 
 - **Room signs** makes 1920x1080 PNGs (event name centered, room name along the bottom). *Classic gray* matches the example sign; *iHotel blue and orange* is the brand version; *Hotel Illinois (U of I)* adds the Hotel Illinois Conference Center logo across the top. Download one, or tick several for a ZIP.
-- **PowerPoint** exports one or more weeks: staff schedule grid, event list with staffing, equipment check, and optionally one sign per event. Signs can be editable text (uses the Montserrat font; install it on the computer that opens the deck) or exact pictures.
+- **Your own designs**: *Manage designs* (in Room signs or Settings) opens a small library. *New design* lets you upload a logo, then *Match colors to logo* samples the image and fills in a matching palette (room bar, accent strip, title and room text) that you can fine-tune with the color pickers or by typing a hex code. Saved designs show up next to the built-in ones everywhere a sign style is picked, and can be edited, duplicated or deleted later.
+- **Customize one sign**: the pencil icon on any sign lets you rename just that sign's text and/or give it its own look — pick one of your saved designs, or build a one-off design (its own logo and colors) for that sign alone. A "Customized" badge marks a sign that differs from the shared style; *Reset to default* clears it.
+- **PowerPoint** exports one or more weeks: staff schedule grid, event list with staffing, equipment check, and optionally one sign per event, using each sign's own customization. Signs can be editable text (uses the Montserrat font; install it on the computer that opens the deck) or exact pictures.
 
 ## Equipment, inventory and audits
 
@@ -83,4 +85,4 @@ Data is saved in this browser for this web address. Clearing site data, using a 
 ## Files
 
 `index.html`, `css/app.css`, and `js/`:
-`util` `store` (data + saving) `merge` and `cloud*` (sync) `audit` `scheduler` (rules and options) `inventory` (equipment check) `pdfimport` `signage` `logo-data` `pptx` `xlsx-export`, then `ui.js`, `filters.js`, the screens (`view-*.js`) and `app.js`. `firebase-rules.json` holds the database rules for cloud sync. No build step.
+`util` `store` (data + saving) `merge` and `cloud*` (sync) `audit` `scheduler` (rules and options) `inventory` (equipment check) `pdfimport` `signage` `logo-data` `pptx` `xlsx-export`, then `ui.js`, `filters.js`, `sign-designer` (logo upload, color matching, per-sign customization), the screens (`view-*.js`) and `app.js`. `firebase-rules.json` holds the database rules for cloud sync. No build step.

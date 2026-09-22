@@ -116,15 +116,17 @@
     if (inv.rentalCost) s.addText(`Estimated rentals this week: $${inv.rentalCost}`, { x: 0.35, y: 6.7, w: 8, h: 0.4, fontFace: FONT, fontSize: 12, bold: true, color: NAVY });
   }
 
-  // Editable copy of the room sign: same layout as the PNG (1920x1080 px -> 13.333 x 7.5 in).
-  function signSlide(pptx, spec, themeKey) {
-    const th = IH.Sign.THEMES[themeKey] || IH.Sign.THEMES.classic;
+  // Editable copy of the room sign: same layout as the PNG (1920x1080 px -> 13.333 x 7.5 in). `th` is a
+  // resolved theme object (built-in, saved design, or a one-off per-sign design).
+  function signSlide(pptx, spec, th) {
     const px = 13.333 / 1920;
     const s = pptx.addSlide();
     s.background = { color: hex(th.bg) };
-    if (th.logo && IH.LOGO) {
-      const lh = th.logo.h * px, lw = (lh * IH.LOGO.w) / IH.LOGO.h;
-      s.addImage({ data: IH.LOGO.src, x: (13.333 - lw) / 2, y: th.logo.y * px, w: lw, h: lh });
+    const logoImg = th.logo && IH.Sign._logoCache[th.logo.src];
+    if (th.logo && logoImg) {
+      const natW = logoImg.naturalWidth || logoImg.width, natH = logoImg.naturalHeight || logoImg.height;
+      const lh = th.logo.h * px, lw = (lh * natW) / natH;
+      s.addImage({ data: th.logo.src, x: (13.333 - lw) / 2, y: th.logo.y * px, w: lw, h: lh });
     }
     if (th.rule) s.addShape(pptx.ShapeType.rect, { x: (1920 - th.rule.w) / 2 * px, y: th.rule.y * px, w: th.rule.w * px, h: th.rule.h * px, fill: { color: hex(th.rule.color) }, line: { color: hex(th.rule.color), width: 0 } });
     const top = th.logo ? 270 * px : 0.4;
@@ -136,8 +138,8 @@
   }
 
   // Pixel-exact copy of the PNG sign dropped in as a picture (not editable text).
-  function signImageSlide(pptx, spec, opts) {
-    const canvas = IH.Sign.render(spec, { theme: opts.signTheme, showDate: opts.signShowDate });
+  function signImageSlide(pptx, spec, th, showDate) {
+    const canvas = IH.Sign.render(spec, { theme: th, showDate });
     const s = pptx.addSlide();
     s.background = { color: 'FFFFFF' };
     s.addImage({ data: canvas.toDataURL('image/png'), x: 0, y: 0, w: 13.333, h: 7.5 });
@@ -173,14 +175,19 @@
     }
     if (opts.includeSigns) {
       const evs = state.events.filter((e) => weeks.some((wk) => U.weekDates(wk).includes(e.date))).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+      // Resolve each event's own design (or the shared one) up front, so every logo it needs is decoded
+      // before any slide is drawn — signSlide/signImageSlide read images synchronously from the cache.
+      const ov = (ev) => ev.signOverride;
+      const sig = (ev) => (ov(ev) && ov(ev).themeKey) === 'inline' ? 'inline:' + JSON.stringify([ov(ev).inline.bar, ov(ev).inline.strip, ov(ev).inline.text, ov(ev).inline.logo && ov(ev).inline.logo.src]) : (ov(ev) && ov(ev).themeKey) || opts.signTheme;
+      const resolved = evs.map((ev) => Object.assign(IH.Sign.forSpec(state, IH.Sign.specFor(state, ev), ov(ev), opts.signTheme), { sig: sig(ev) }));
+      await IH.Sign.preload(resolved.map((r) => r.theme), opts);
       const seen = new Set();
-      evs.forEach((ev) => {
-        const spec = IH.Sign.specFor(state, ev);
-        const k = spec.room + '|' + spec.name;
-        if (seen.has(k)) return; // one sign per room + event name, even if it runs several days
+      resolved.forEach((r) => {
+        const k = r.spec.room + '|' + r.spec.name + '|' + r.sig;
+        if (seen.has(k)) return; // one sign per room + event name + design, even if it runs several days
         seen.add(k);
-        if (opts.signAsImage && typeof document !== 'undefined') signImageSlide(pptx, spec, opts);
-        else signSlide(pptx, spec, opts.signTheme);
+        if (opts.signAsImage && typeof document !== 'undefined') signImageSlide(pptx, r.spec, r.theme, opts.signShowDate);
+        else signSlide(pptx, r.spec, r.theme);
       });
     }
     return pptx;
