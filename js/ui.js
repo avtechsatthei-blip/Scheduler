@@ -192,6 +192,7 @@
     if (!IH.Store.state) return;
     if (!UI.weekKey) UI.weekKey = UI.defaultWeek();
     const v = UI.Views[UI.view] || UI.Views.week;
+    if (UI.normFilter) UI.normFilter();
     const main = UI.$('#main');
     const y = window.scrollY;
     main.innerHTML = v.render();
@@ -220,6 +221,17 @@
   };
 
   UI.pageTop = (title, kicker, actionsHtml) => `<div class="top"><div><span class="kicker">${esc(kicker || 'Hotel Illinois Conference Center')}</span><h1>${esc(title)}</h1></div><div class="actions">${actionsHtml || ''}</div></div>`;
+
+  // Print a chunk of HTML on its own (used for audit sheets): the rest of the page is hidden while printing.
+  UI.printHtml = (html, pageCss) => {
+    let host = UI.$('#print-root');
+    if (!host) { host = document.createElement('div'); host.id = 'print-root'; document.body.appendChild(host); }
+    host.innerHTML = (pageCss ? `<style>${pageCss}</style>` : '') + html;
+    document.body.classList.add('printing');
+    const done = () => { document.body.classList.remove('printing'); host.innerHTML = ''; window.removeEventListener('afterprint', done); };
+    window.addEventListener('afterprint', done);
+    setTimeout(() => window.print(), 60);
+  };
 
   /* ---------- global event delegation ---------- */
   document.addEventListener('click', (e) => {

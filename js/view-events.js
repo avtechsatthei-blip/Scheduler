@@ -2,7 +2,7 @@
 (function (root) {
   const IH = root.IH, U = IH.U, UI = IH.UI, Store = IH.Store;
   const { esc, icon: ic } = UI;
-  const mem = (UI.mem.events = UI.mem.events || { scope: 'week', q: '' });
+  const mem = (UI.mem.events = UI.mem.events || { scope: 'week' });
 
   /* ======================= list ======================= */
   UI.Views.events = {
@@ -12,23 +12,22 @@
       let list = st.events.slice();
       if (mem.scope === 'week') { const set = new Set(U.weekDates(UI.weekKey)); list = list.filter((e) => set.has(e.date)); }
       else if (mem.scope === 'upcoming') list = list.filter((e) => e.date >= U.today());
-      const q = mem.q.trim().toLowerCase();
-      if (q) list = list.filter((e) => (e.name + ' ' + UI.roomName(e.roomId) + ' ' + (e.contact || '')).toLowerCase().includes(q));
+      const total = list.length;
+      list = list.filter((e) => UI.evMatches(e));
       list.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start) || a.name.localeCompare(b.name));
       const groups = {};
       list.forEach((e) => (groups[e.date] = groups[e.date] || []).push(e));
 
       const top = UI.pageTop('Events', 'Everything on the calendar',
         `${mem.scope === 'week' ? UI.weekNav() : ''}<button class="btn" data-act="import-open">${ic('upload', 'sm')} Import PDF</button><button class="btn primary" data-act="ev-new">${ic('plus', 'sm')} Add event</button>`);
-      const bar = `<div class="row wrap noprint" style="margin-bottom:16px">
+      const bar = `<div class="row wrap noprint" style="margin-bottom:12px">
         <div class="seg">${[['week', 'This week'], ['upcoming', 'Upcoming'], ['all', 'All']].map(([k, l]) => `<button class="${mem.scope === k ? 'on' : ''}" data-act="ev-scope" data-scope="${k}">${l}</button>`).join('')}</div>
-        <input class="in sm" style="max-width:260px" placeholder="Search name, room or contact" value="${esc(mem.q)}" data-input="ev-search" id="ev-q">
-        <span class="muted small">${UI.plural(list.length, 'event')}</span></div>`;
+        <span class="muted small">${UI.filterActive() ? `Showing ${list.length} of ${UI.plural(total, 'event')}` : UI.plural(list.length, 'event')}</span></div>${UI.filterBar({ days: mem.scope === 'week' ? 'week' : 'date' })}`;
 
       if (!list.length) {
         return top + bar + `<div class="card pad empty"><h3>${st.events.length ? 'Nothing matches' : 'No events yet'}</h3>
-          <p>${st.events.length ? 'Try another week or clear the search.' : 'Add an event by hand, or import an event-sheet PDF and review the drafts it builds.'}</p>
-          <div class="row" style="justify-content:center"><button class="btn primary" data-act="ev-new">${ic('plus', 'sm')} Add event</button><button class="btn" data-act="import-open">${ic('upload', 'sm')} Import PDF</button></div></div>`;
+          <p>${st.events.length ? 'Try another week, or clear the filters.' : 'Add an event by hand, or import an event-sheet PDF and review the drafts it builds.'}</p>
+          <div class="row" style="justify-content:center">${UI.filterActive() ? '<button class="btn" data-act="flt-clear">Clear filters</button>' : ''}<button class="btn primary" data-act="ev-new">${ic('plus', 'sm')} Add event</button><button class="btn" data-act="import-open">${ic('upload', 'sm')} Import PDF</button></div></div>`;
       }
       return top + bar + Object.keys(groups).sort().map((d) => `<div class="daygroup"><h4>${U.fmtLong(d)} <small>${UI.plural(groups[d].length, 'event')}</small></h4>
         <div class="card">${groups[d].map((e) => {
@@ -36,18 +35,12 @@
           return `<div class="erow"><div class="tm">${U.fmtRange(e.start, e.end)}</div>
             <div><div class="nm">${esc(e.name)} ${e.review ? '<span class="tag warn" title="' + esc(e.review) + '">Review</span>' : ''}</div><div class="small muted">${[e.contact, e.attendees ? e.attendees + ' guests' : '', e.setup].filter(Boolean).map(esc).join(' · ')}</div></div>
             <div><span class="roompill" style="--rc:${rc}">${esc(UI.roomName(e.roomId))}</span></div>
-            <div class="avs small">${e.noAV ? '<span class="tag gray">No AV</span>' : esc(UI.itemsText(e))} ${e.tech && e.tech.count ? `<span class="tag navy">${e.tech.count}× tech</span>` : ''}</div>
+            <div class="avs small">${e.noAV ? '<span class="tag gray">No AV</span>' : esc(UI.itemsText(e))} ${IH.Sched.techPeak(e) ? `<span class="tag navy">${esc(IH.Sched.techText(e))}</span>` : ''}</div>
             <div class="acts noprint"><button class="btn ghost icon sm" data-act="sign-for" data-id="${e.id}" title="Room sign">${ic('image', 'sm')}</button><button class="btn ghost icon sm" data-act="ev-dup" data-id="${e.id}" title="Duplicate">${ic('copy', 'sm')}</button><button class="btn ghost icon sm" data-act="ev-edit" data-id="${e.id}" title="Edit">${ic('edit', 'sm')}</button><button class="btn ghost icon sm danger" data-act="ev-del" data-id="${e.id}" title="Delete">${ic('trash', 'sm')}</button></div></div>`;
         }).join('')}</div></div>`).join('');
     },
   };
   UI.Acts['ev-scope'] = (el) => { mem.scope = el.dataset.scope; UI.render(); };
-  UI.Changes['ev-search'] = (el) => {
-    mem.q = el.value;
-    const pos = el.selectionStart;
-    UI.render();
-    const n = UI.$('#ev-q'); if (n) { n.focus(); n.setSelectionRange(pos, pos); }
-  };
   UI.Acts['ev-del'] = async (el) => {
     const ev = Store.state.events.find((e) => e.id === el.dataset.id);
     if (!ev) return;
@@ -73,6 +66,8 @@
     const isNew = !ev;
     const base = ev ? U.clone(ev) : Object.assign({ name: '', roomId: (st.rooms[0] || {}).id, date: defaultDate(), start: st.settings.defaultStart, end: st.settings.defaultEnd, items: [], tech: { count: 0, start: '', end: '' }, noAV: false, attendees: '', contact: '', setup: '', notes: '' }, defaults || {});
     base.tech = Object.assign({ count: 0, start: '', end: '' }, base.tech || {});
+    // Tech times: a list of { start, end, count }. An old single From/To slice becomes one row.
+    let wins = Array.isArray(base.tech.windows) && base.tech.windows.length ? base.tech.windows.map((w) => ({ ...w })) : (base.tech.start || base.tech.end) && base.tech.count ? [{ start: base.tech.start || base.start, end: base.tech.end || base.end, count: base.tech.count }] : [];
     let items = (base.items || []).map((i) => ({ ...i }));
     let fromKit = isNew && !isDup && !items.length;
     if (isNew && !isDup && !items.length && base.roomId) items = kitOf(base.roomId);
@@ -96,9 +91,10 @@
       <div class="span-12"><div class="row wrap" style="gap:18px">
         <div><div class="small" style="font-weight:700;color:var(--navy);margin-bottom:5px">In-room tech <span class="muted" style="font-weight:500">(an extra person for the event)</span></div>
           <div class="row"><button class="btn icon sm" type="button" data-step="-1">−</button><input class="in num" type="number" min="0" max="9" name="techCount" value="${base.tech.count || 0}" style="text-align:center"><button class="btn icon sm" type="button" data-step="1">+</button></div></div>
-        <div id="techtimes" class="row wrap ${base.tech.count ? '' : 'hide'}" style="gap:10px;align-items:flex-end">
-          <label class="check small"><input type="checkbox" name="techPart" ${base.tech.start || base.tech.end ? 'checked' : ''}> Only part of the event</label>
-          <div id="techpart" class="row ${base.tech.start || base.tech.end ? '' : 'hide'}">${UI.field('From', `<input class="in sm" type="time" name="techStart" value="${base.tech.start || ''}">`)}${UI.field('To', `<input class="in sm" type="time" name="techEnd" value="${base.tech.end || ''}">`)}</div></div></div></div>
+        <div id="techtimes" class="${base.tech.count ? '' : 'hide'}" style="flex:1;min-width:300px">
+          <label class="check small"><input type="checkbox" name="techPart" ${wins.length ? 'checked' : ''}> Only at certain times</label>
+          <div id="techpart" class="${wins.length ? '' : 'hide'}" style="margin-top:8px"><div id="techwins" class="col" style="gap:6px"></div>
+            <div class="row" style="margin-top:8px;gap:10px"><button class="btn sm" type="button" data-addwin>${ic('plus', 'sm')} Add a time</button><span class="small muted">Setup and strike time from Settings is added around each time.</span></div></div></div></div></div>
       <div class="span-6">${UI.field('Room setup', `<input class="in" name="setup" value="${esc(base.setup || '')}" placeholder="e.g. 18 rounds of 10">`)}</div>
       <div class="span-6">${UI.field('Notes', `<textarea class="in" name="notes" style="min-height:44px" placeholder="Agenda, load-in, special asks">${esc(base.notes || '')}</textarea>`)}</div>
       ${base.review ? `<div class="span-12"><div class="callout warn">${ic('alert')}<div><b>Imported from a PDF, please check:</b> ${esc(base.review)}</div></div></div>` : ''}
@@ -133,13 +129,28 @@
       liveCheck();
     }
 
+    function drawWins() {
+      const box = UI.$('#techwins', m.el);
+      if (!box) return;
+      box.innerHTML = wins.map((w, i) => `<div class="row wrap" style="gap:8px;align-items:flex-end" data-wi="${i}">
+          ${UI.field('From', `<input class="in sm" type="time" data-w="start" value="${esc(w.start || '')}">`)}${UI.field('To', `<input class="in sm" type="time" data-w="end" value="${esc(w.end || '')}">`)}
+          ${UI.field('Techs', `<input class="in sm num" type="number" min="1" max="9" data-w="count" value="${w.count || 1}" style="max-width:64px">`)}
+          <button class="btn ghost icon sm danger" type="button" data-rmwin="${i}" title="Remove this time">${ic('x', 'sm')}</button>
+          ${w.start && w.end && w.end <= w.start ? '<span class="tag bad">End must be after start</span>' : ''}</div>`).join('') || '<div class="muted small">No times yet.</div>';
+    }
+
     function collect() {
       const v = UI.formVals(UI.$('#evf', m.el));
       const clean = items.filter((i) => String(i.name).trim()).map((i) => ({ name: String(i.name).trim(), qty: Math.max(1, +i.qty || 1), builtIn: !!i.builtIn }));
       return {
         name: v.name.trim(), date: v.date, start: v.start, end: v.end, roomSel: v.room, newRoomName: (v.newRoomName || '').trim(), newRoomKit: v.newRoomKit,
         items: v.noAV ? [] : clean, noAV: !!v.noAV,
-        tech: { count: v.noAV ? 0 : Math.max(0, +v.techCount || 0), start: v.techPart ? v.techStart : '', end: v.techPart ? v.techEnd : '' },
+        tech: (() => {
+          if (v.noAV) return { count: 0, start: '', end: '' };
+          const wl = v.techPart ? wins.filter((w) => w.start && w.end && w.end > w.start && +w.count > 0).map((w) => ({ start: w.start, end: w.end, count: Math.min(9, Math.max(1, Math.round(+w.count))) })) : [];
+          if (wl.length) return { count: Math.max(...wl.map((w) => w.count)), start: '', end: '', windows: wl };
+          return { count: Math.max(0, +v.techCount || 0), start: '', end: '' };
+        })(),
         attendees: v.attendees === '' ? '' : +v.attendees, contact: v.contact.trim(), setup: v.setup.trim(), notes: v.notes.trim(), repeat: Math.max(0, Math.min(6, +v.repeat || 0)),
       };
     }
@@ -171,6 +182,7 @@
       sel.onchange = applyRoom;
       el.addEventListener('input', (e) => {
         const t = e.target;
+        if (t.dataset && t.dataset.w) { const w = wins[+t.closest('[data-wi]').dataset.wi]; w[t.dataset.w] = t.dataset.w === 'count' ? +t.value : t.value; if (t.dataset.w !== 'count') { const bad = w.start && w.end && w.end <= w.start; const row = t.closest('[data-wi]'); const tag = UI.$('.tag.bad', row); if (bad && !tag) row.insertAdjacentHTML('beforeend', '<span class="tag bad">End must be after start</span>'); if (!bad && tag) tag.remove(); } liveCheck(); }
         if (t.dataset && t.dataset.k) { items[+t.dataset.i][t.dataset.k] = t.dataset.k === 'qty' ? +t.value : t.value; fromKit = false; }
         if (t.name === 'techCount') UI.$('#techtimes', el).classList.toggle('hide', !(+t.value > 0));
         liveCheck();
@@ -178,12 +190,18 @@
       el.addEventListener('change', (e) => {
         const t = e.target;
         if (t.name === 'noAV') drawItems();
-        if (t.name === 'techPart') UI.$('#techpart', el).classList.toggle('hide', !t.checked);
+        if (t.name === 'techPart') {
+          UI.$('#techpart', el).classList.toggle('hide', !t.checked);
+          if (t.checked && !wins.length) { const f = UI.formVals(UI.$('#evf', el)); wins.push({ start: f.start, end: f.end, count: Math.max(1, +f.techCount || 1) }); }
+          drawWins(); liveCheck();
+        }
         if (t.name === 'date' || t.name === 'start' || t.name === 'end') liveCheck();
       });
       el.addEventListener('click', (e) => {
         const b = e.target.closest('button');
         if (!b) return;
+        if (b.hasAttribute('data-addwin')) { const last = wins[wins.length - 1]; wins.push({ start: last ? last.end : '', end: '', count: last ? last.count : 1 }); drawWins(); const ins = UI.$$('[data-w=start]', el); ins[ins.length - 1].focus(); }
+        if (b.hasAttribute('data-rmwin')) { wins.splice(+b.dataset.rmwin, 1); drawWins(); liveCheck(); }
         if (b.dataset.step) { const n = UI.$('[name=techCount]', el); n.value = Math.max(0, Math.min(9, (+n.value || 0) + +b.dataset.step)); n.dispatchEvent(new Event('input', { bubbles: true })); }
         if (b.dataset.rm != null && b.hasAttribute('data-rm')) { items.splice(+b.dataset.rm, 1); fromKit = false; drawItems(); }
         if (b.hasAttribute('data-addrow')) { items.push({ name: '', qty: 1, builtIn: false }); fromKit = false; drawItems(); const ins = UI.$$('[data-k=name]', el); ins[ins.length - 1].focus(); }
@@ -195,6 +213,7 @@
         }
       });
       drawItems();
+      drawWins();
       applyRoom();
     }
 

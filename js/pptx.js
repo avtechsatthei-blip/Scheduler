@@ -93,7 +93,7 @@
         const items = ev.noAV ? 'No AV' : (ev.items || []).map((i) => `${i.qty > 1 ? i.qty + '× ' : ''}${i.name}`).join(', ');
         table.push([
           cell(U.fmtDay(ev.date)), cell(U.fmtRange(ev.start, ev.end), { align: 'center' }), cell(ev.name, { bold: true }), cell(room ? room.name : ''),
-          cell(items, { fontSize: 8 }), cell(ev.tech && ev.tech.count ? ev.tech.count : '–', { align: 'center' }), cell([...new Set(crew)].join(', '), { fontSize: 8 }),
+          cell(items, { fontSize: 8 }), cell(IH.Sched.techPeak(ev) ? IH.Sched.techText(ev).replace(/^Tech /, '').replace(' in-room tech', '') : '–', { align: 'center', fontSize: 8 }), cell([...new Set(crew)].join(', '), { fontSize: 8 }),
         ]);
       });
       s.addTable(table, { x: 0.35, y: 1.2, w: 12.63, colW: [0.95, 1.55, 2.4, 1.9, 3.1, 0.6, 2.13], rowH: 0.46, border: { type: 'solid', pt: 0.5, color: LINE }, autoPage: false });
@@ -116,15 +116,23 @@
     if (inv.rentalCost) s.addText(`Estimated rentals this week: $${inv.rentalCost}`, { x: 0.35, y: 6.7, w: 8, h: 0.4, fontFace: FONT, fontSize: 12, bold: true, color: NAVY });
   }
 
-  // Editable copy of the room sign: same layout as the PNG.
+  // Editable copy of the room sign: same layout as the PNG (1920x1080 px -> 13.333 x 7.5 in).
   function signSlide(pptx, spec, themeKey) {
     const th = IH.Sign.THEMES[themeKey] || IH.Sign.THEMES.classic;
+    const px = 13.333 / 1920;
     const s = pptx.addSlide();
     s.background = { color: hex(th.bg) };
-    s.addText(spec.name, { x: 0.25, y: 0.4, w: 12.83, h: 5.5, fontFace: FONT, fontSize: 72, color: hex(th.text), align: 'center', valign: 'middle', shadow: th.shadow ? { type: 'outer', color: '000000', opacity: 0.3, blur: 3, offset: 2, angle: 45 } : undefined });
-    s.addShape(pptx.ShapeType.rect, { x: 0, y: 6.153, w: 13.333, h: 1.069, fill: { color: hex(th.bar) }, line: { color: hex(th.barLine), width: 1 } });
-    s.addShape(pptx.ShapeType.rect, { x: 0, y: 7.222, w: 13.333, h: 0.278, fill: { color: hex(th.strip) }, line: { color: hex(th.stripLine), width: 1 } });
-    s.addText(spec.room, { x: 0.02, y: 6.153, w: 13.2, h: 1.069, fontFace: FONT, fontSize: 66, color: hex(th.roomText), align: 'left', valign: 'middle', margin: 0.05 });
+    if (th.logo && IH.LOGO) {
+      const lh = th.logo.h * px, lw = (lh * IH.LOGO.w) / IH.LOGO.h;
+      s.addImage({ data: IH.LOGO.src, x: (13.333 - lw) / 2, y: th.logo.y * px, w: lw, h: lh });
+    }
+    if (th.rule) s.addShape(pptx.ShapeType.rect, { x: (1920 - th.rule.w) / 2 * px, y: th.rule.y * px, w: th.rule.w * px, h: th.rule.h * px, fill: { color: hex(th.rule.color) }, line: { color: hex(th.rule.color), width: 0 } });
+    const top = th.logo ? 270 * px : 0.4;
+    const bottom = 860 * px;
+    s.addText(spec.name, { x: 0.25, y: top, w: 12.83, h: bottom - top, fontFace: FONT, fontSize: 72, bold: (th.weight || 500) >= 600, color: hex(th.text), align: 'center', valign: 'middle', shadow: th.shadow ? { type: 'outer', color: '000000', opacity: 0.3, blur: 3, offset: 2, angle: 45 } : undefined });
+    s.addShape(pptx.ShapeType.rect, { x: 0, y: 886 * px, w: 13.333, h: 154 * px, fill: { color: hex(th.bar) }, line: { color: hex(th.barLine), width: 1 } });
+    s.addShape(pptx.ShapeType.rect, { x: 0, y: 1040 * px, w: 13.333, h: 40 * px, fill: { color: hex(th.strip) }, line: { color: hex(th.stripLine), width: 1 } });
+    s.addText(spec.room, { x: 0.02, y: 886 * px, w: 13.2, h: 154 * px, fontFace: FONT, fontSize: 66, bold: (th.roomWeight || 500) >= 600, color: hex(th.roomText), align: 'left', valign: 'middle', margin: 0.05 });
   }
 
   // Pixel-exact copy of the PNG sign dropped in as a picture (not editable text).

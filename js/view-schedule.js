@@ -28,6 +28,21 @@
     return Sched.checkAgainst(n, staff, others, cfgOf(st), weekSet, { weekly: true, daily: true });
   }
 
+  // Does this shift pass the room / day / search filter?
+  function shiftVisible(st, sh) {
+    const F = UI.filter;
+    if (F.day && sh.date !== F.day) return false;
+    const evs = (sh.eventIds || []).map((id) => st.events.find((e) => e.id === id)).filter(Boolean);
+    if (F.rooms.length && !evs.some((e) => F.rooms.includes(e.roomId))) return false;
+    const q = F.q.trim().toLowerCase();
+    if (q) {
+      const who = sh.staffId ? (Store.staffById(sh.staffId) || {}).name || '' : 'open unassigned';
+      const hay = [who, sh.kind === 'tech' ? 'in-room tech' : 'room coverage'].concat(evs.map((e) => `${e.name} ${UI.roomName(e.roomId)}`)).join(' ').toLowerCase();
+      if (!q.split(/\s+/).every((w) => hay.includes(w))) return false;
+    }
+    return true;
+  }
+
   function optionRank(o) {
     const e = o.issues.filter((i) => i.level === 'error').length;
     return e * 1000 + o.summary.open * 100 + o.summary.underMin * 10 - o.summary.prefPct / 100 + o.summary.overtimeHrs;
@@ -110,6 +125,8 @@
         return html;
       }
 
+      const vis = shifts.filter((x) => shiftVisible(st, x)).length;
+      html += UI.filterBar({ days: 'week', info: UI.filterActive() ? `Showing ${vis} of ${UI.plural(shifts.length, 'shift')}. Hours are for the whole week.` : '' });
       html += grid(shifts, !previewOpt);
       const issues = Sched.validate(st, wk, shifts);
       html += issuesCard(issues, shifts);
@@ -119,12 +136,14 @@
 
   function grid(shifts, editable) {
     const st = Store.state, wk = UI.weekKey;
-    const dates = U.weekDates(wk);
+    const dates = UI.filter.day ? [UI.filter.day] : U.weekDates(wk);
     const mins = Sched.weekMinutes(shifts, wk);
+    const filtering = UI.filterActive();
     const issues = Sched.validate(st, wk, shifts);
     const badIds = new Set(issues.filter((i) => i.level === 'error' && i.shiftId).map((i) => i.shiftId));
-    const staff = st.staff.filter((x) => x.active || shifts.some((sh) => sh.staffId === x.id));
-    const open = shifts.filter((x) => !x.staffId);
+    const seen = shifts.filter((sh) => shiftVisible(st, sh));
+    const staff = st.staff.filter((x) => (x.active || shifts.some((sh) => sh.staffId === x.id)) && (!filtering || seen.some((sh) => sh.staffId === x.id)));
+    const open = seen.filter((x) => !x.staffId);
     const today = U.today();
     const chip = (sh, s) => {
       const c = s ? s.color : '#c43d2b';
@@ -137,19 +156,20 @@
     }).join('')}<th>Week</th></tr>`;
     const openRow = open.length ? `<tr class="openrow"><td class="who"><div class="row"><span class="avatar" style="background:var(--bad)">!</span><div><b style="color:var(--bad)">Open shifts</b><div class="tiny muted">${open.length} unfilled</div></div></div></td>
       ${dates.map((d) => `<td data-staff="" data-date="${d}">${open.filter((x) => x.date === d).map((x) => chip(x, null)).join('')}</td>`).join('')}<td class="hrs"></td></tr>` : '';
+    const noneMsg = !staff.length && !open.length ? `<tr><td colspan="${dates.length + 2}"><div class="empty" style="padding:26px"><p style="margin:0">No shifts match these filters.</p></div></td></tr>` : '';
     const rows = staff.map((s) => {
       const m = mins[s.id] || 0;
       const min = (s.minWeek || 0) * 60, max = (s.maxWeek || st.settings.maxWeekHrs) * 60;
       const cls = m > max ? 'over' : m < min ? 'under' : '';
       return `<tr><td class="who"><div class="row"><span class="avatar" style="background:${s.color}">${esc(UI.initials(s.name))}</span><div><b>${esc(s.name)}</b><div class="tiny muted">${esc(s.role || '')}${s.active ? '' : ' · inactive'}</div></div></div></td>
         ${dates.map((d) => {
-          const list = shifts.filter((x) => x.staffId === s.id && x.date === d).sort((a, b) => a.start.localeCompare(b.start));
+          const list = seen.filter((x) => x.staffId === s.id && x.date === d).sort((a, b) => a.start.localeCompare(b.start));
           const dayOff = Sched.onDayOff(s, d), unavail = s.avail && s.avail[U.dow(d)] && s.avail[U.dow(d)].on === false;
           return `<td data-staff="${s.id}" data-date="${d}" class="${!list.length && (dayOff || unavail) ? 'off' : ''}">${list.map((x) => chip(x, s)).join('')}${!list.length && dayOff ? `<div class="offl">Day off${Sched.dayOffNote(s, d) ? ': ' + esc(Sched.dayOffNote(s, d)) : ''}</div>` : ''}${editable ? `<button class="btn xs ghost addbtn" data-act="sh-add" data-staff="${s.id}" data-date="${d}" title="Add a shift">${ic('plus', 'sm')}</button>` : ''}</td>`;
         }).join('')}
         <td class="hrs"><b>${m ? U.hrs(m) : '–'}</b><div class="tiny muted">${s.minWeek || 0}–${Math.round(max / 60)}h</div><div class="hrsbar ${cls}"><i style="width:${Math.min(100, (m / Math.max(1, max)) * 100)}%"></i></div></td></tr>`;
     }).join('');
-    return `<div class="card scroll-x"><table class="sgrid" id="sgrid"><thead>${head}</thead><tbody>${openRow}${rows}</tbody></table></div>
+    return `<div class="card scroll-x"><table class="sgrid" id="sgrid"><thead>${head}</thead><tbody>${openRow}${rows}${noneMsg}</tbody></table></div>
       ${editable ? '<div class="small muted noprint" style="margin-top:8px">Click a shift to change who works it or its times. Drag a shift to another person on the same day. Lock a shift and it stays put when you rebuild.</div>' : ''}`;
   }
 

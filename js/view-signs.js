@@ -12,6 +12,7 @@
     const st = Store.state;
     let evs = st.events.slice();
     if (mem.scope === 'week') { const set = new Set(U.weekDates(UI.weekKey)); evs = evs.filter((e) => set.has(e.date)); }
+    evs = evs.filter((e) => UI.evMatches(e));
     evs.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
     const out = [];
     const seen = new Map();
@@ -40,7 +41,7 @@
       if (!mem.current || (!list.find((x) => x.key === mem.current) && mem.current !== '__custom')) mem.current = list[0] ? list[0].key : '__custom';
       const top = UI.pageTop('Room signs', 'PNG signs for the room screens', `${mem.scope === 'week' ? UI.weekNav() : ''}`);
       const selN = list.filter((x) => mem.sel.has(x.key)).length;
-      return top + `<div class="row wrap noprint" style="margin-bottom:16px;gap:12px">
+      return top + UI.filterBar({ days: mem.scope === 'week' ? 'week' : 'date' }) + `<div class="row wrap noprint" style="margin-bottom:16px;gap:12px">
           <div class="seg">${[['week', 'This week'], ['all', 'All events']].map(([k, l]) => `<button class="${mem.scope === k ? 'on' : ''}" data-act="sign-scope" data-scope="${k}">${l}</button>`).join('')}</div>
           <div class="seg">${Object.entries(Sign.THEMES).map(([k, t]) => `<button class="${theme() === k ? 'on' : ''}" data-act="sign-theme" data-theme="${k}">${esc(t.label)}</button>`).join('')}</div>
           <label class="check"><span class="switch"><input type="checkbox" data-change="sign-date" ${showDate() ? 'checked' : ''}><i></i></span> Show date and time</label>

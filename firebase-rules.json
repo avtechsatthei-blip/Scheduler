@@ -1,0 +1,13 @@
+{
+  "_README": "Do NOT paste this over your existing rules. Copy the two blocks below ('avScheduler' and 'avSchedulerAllowed') INTO the existing \"rules\": { ... } object in Firebase console > Realtime Database > Rules, next to the rules your messaging app already uses, then press Publish. Remove this _README line if you paste the whole file into a fresh project.",
+  "rules": {
+    "avScheduler": {
+      ".read": "auth != null && root.child('avSchedulerAllowed').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('avSchedulerAllowed').child(auth.uid).val() === true"
+    },
+    "avSchedulerAllowed": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

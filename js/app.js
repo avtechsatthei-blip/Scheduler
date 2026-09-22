@@ -12,6 +12,7 @@
     route();
     UI.weekKey = UI.defaultWeek();
     UI.render();
+    if (IH.Cloud) IH.Cloud.init();
   });
   // warn before closing while a PDF import or export is running is overkill; data autosaves on every change.
 })(window);

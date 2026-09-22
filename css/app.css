@@ -123,7 +123,7 @@ select.in { appearance: none; background-image: url("data:image/svg+xml,%3Csvg x
 label.f { display: flex; flex-direction: column; gap: 5px; font-size: 11.5px; font-weight: 700; color: var(--navy); letter-spacing: 0.02em; }
 label.f .hint { font-weight: 500; color: var(--muted); letter-spacing: 0; font-size: 11.5px; }
 .form-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; }
-.span-12 { grid-column: span 12; } .span-8 { grid-column: span 8; } .span-6 { grid-column: span 6; } .span-4 { grid-column: span 4; } .span-3 { grid-column: span 3; } .span-2 { grid-column: span 2; }
+.span-12 { grid-column: span 12; } .span-5 { grid-column: span 5; } .span-9 { grid-column: span 9; } .span-8 { grid-column: span 8; } .span-6 { grid-column: span 6; } .span-4 { grid-column: span 4; } .span-3 { grid-column: span 3; } .span-2 { grid-column: span 2; }
 .check { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; user-select: none; }
 .check input { width: 17px; height: 17px; accent-color: var(--orange); }
 .switch { display: inline-block; position: relative; width: 38px; height: 22px; flex: none; }
@@ -377,3 +377,54 @@ kbd { background: #fff; border: 1px solid var(--line); border-bottom-width: 2px;
 
 .tbl td:first-child { white-space: nowrap; }
 .tbl.wrapfirst td:first-child { white-space: normal; }
+
+/* ---------------- equipment ---------------- */
+.tbl tr.grp td { background: #f4f1eb; font-weight: 700; color: var(--navy); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; padding: 8px 12px; }
+.tbl.inv td { padding: 8px 10px; }
+.tbl.inv .in.sm { padding: 5px 7px; }
+.tbl .avail { font-weight: 700; color: var(--navy); }
+.tbl .avail.low { color: var(--bad); }
+.tbl td.nm { white-space: normal; min-width: 190px; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.filters .in { width: auto; min-width: 130px; }
+.filters .grow-in { flex: 1 1 200px; max-width: 320px; }
+.tabs { display: inline-flex; gap: 4px; background: #ece8e1; padding: 4px; border-radius: 12px; margin-bottom: 18px; }
+.tabs button { border: 0; background: none; padding: 8px 16px; border-radius: 9px; font-weight: 700; color: var(--muted); cursor: pointer; font-size: 13px; display: inline-flex; gap: 8px; align-items: center; }
+.tabs button.on { background: #fff; color: var(--navy); box-shadow: 0 1px 4px rgba(16, 41, 75, 0.18); }
+.pbar { height: 8px; background: #ece8e1; border-radius: 99px; overflow: hidden; }
+.pbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--ok), #4fb58f); transition: width 0.2s; }
+.tbl.audit td { padding: 6px 8px; }
+.tbl.audit tr.done td { background: #f6fbf8; }
+.tbl.audit tr.off td { background: #fdf3f1; }
+.vchip { display: inline-block; min-width: 34px; text-align: center; border-radius: 6px; padding: 2px 7px; font-weight: 700; font-size: 12px; }
+.vchip.z { background: var(--ok-bg); color: var(--ok); } .vchip.n { background: var(--bad-bg); color: var(--bad); } .vchip.p { background: var(--warn-bg); color: var(--warn); } .vchip.e { color: #b8bfcb; }
+
+/* ---------------- shared filter bar ---------------- */
+.fbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+.fbar.active { border-color: var(--orange); box-shadow: 0 0 0 1px var(--orange) inset; }
+.fbar .q { flex: 1 1 180px; max-width: 280px; }
+.fbar .rooms { display: flex; gap: 5px; flex-wrap: wrap; }
+.rchip { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--line); background: #fff; border-radius: 99px; padding: 3px 11px 3px 8px; font-size: 12px; font-weight: 700; color: var(--navy); cursor: pointer; }
+.rchip::before { content: ''; width: 9px; height: 9px; border-radius: 3px; background: var(--rc); }
+.rchip:hover { border-color: var(--navy); }
+.rchip.on { background: var(--rc); border-color: var(--rc); color: #fff; }
+.rchip.on::before { background: #fff; }
+.board.one { grid-template-columns: minmax(0, 520px); }
+
+/* ---------------- cloud ---------------- */
+.cloud-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #93a3bd; margin-right: 6px; }
+.cloud-dot.ok { background: #4fd0a0; } .cloud-dot.busy { background: #e8a92c; animation: pulse 1s infinite; } .cloud-dot.bad { background: #ff7a5c; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+.uidbox { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; background: #fff; border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; word-break: break-all; }
+
+/* ---------------- printing audit sheets ---------------- */
+#print-root { display: none; }
+@media print {
+  body.printing #app, body.printing #tabbar, body.printing #modal-root, body.printing #toasts { display: none !important; }
+  body.printing #print-root { display: block; color: #000; font-family: var(--sans); }
+  @page { margin: 0.4in; }
+}
+.namebtn { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--navy); text-align: left; cursor: pointer; }
+.namebtn:hover { text-decoration: underline; text-underline-offset: 3px; }
+.side-foot .cs { display: flex; align-items: center; margin-bottom: 6px; }
+.fbar select.in { min-width: 150px; }

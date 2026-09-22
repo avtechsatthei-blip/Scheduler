@@ -20,13 +20,30 @@
       bg: '#FFFFFF', text: '#10294B', shadow: null,
       bar: '#10294B', barLine: '#10294B', roomText: '#FFFFFF', strip: '#F15A32', stripLine: '#F15A32',
     },
+    // Hotel Illinois lockup across the top (taken from the event-sheet header), Illini blue type, blue room bar, orange strip.
+    uofi: {
+      label: 'Hotel Illinois (U of I)',
+      bg: '#FFFFFF', text: '#10294B', shadow: null, weight: 600, roomWeight: 600,
+      bar: '#10294B', barLine: '#10294B', roomText: '#FFFFFF', strip: '#F15A32', stripLine: '#F15A32',
+      logo: { h: 132, y: 62 }, rule: { y: 240, w: 132, h: 6, color: '#F15A32' }, titleCy: 566, titleMaxH: 600,
+    },
   };
 
-  Sign.ready = async () => {
+  Sign._logo = null;
+  // Load fonts and the logo image before drawing. In Node pass { loadImage } (from the canvas package).
+  Sign.ready = async (opts) => {
     if (typeof document !== 'undefined' && document.fonts && document.fonts.load) {
       try {
-        await document.fonts.load(`500 144px Montserrat`);
+        await Promise.all([document.fonts.load('500 144px Montserrat'), document.fonts.load('600 144px Montserrat')]);
       } catch (e) { /* fall back to system font */ }
+    }
+    if (IH.LOGO && !Sign._logo) {
+      try {
+        if (opts && opts.loadImage) Sign._logo = await opts.loadImage(IH.LOGO.src);
+        else if (typeof Image !== 'undefined') {
+          Sign._logo = await new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = IH.LOGO.src; });
+        }
+      } catch (e) { Sign._logo = null; }
     }
   };
 
@@ -58,11 +75,12 @@
     return lines;
   }
 
-  function fitTitle(ctx, text, maxW, maxLines) {
+  function fitTitle(ctx, text, maxW, maxLines, weight, maxH) {
     const words = String(text || '').trim().split(/\s+/).filter(Boolean);
     if (!words.length) return { size: 144, lines: [''] };
+    const found = [];
     for (let size = 144; size >= 48; size -= 4) {
-      ctx.font = `500 ${size}px ${Sign.FONT}`;
+      ctx.font = `${weight || 500} ${size}px ${Sign.FONT}`;
       const widths = words.map((w) => ctx.measureText(w).width);
       widths.space = ctx.measureText(' ').width;
       // how many lines does a greedy fill need?
@@ -71,11 +89,16 @@
         const add = (cur ? widths.space : 0) + widths[i];
         if (cur + add > maxW && cur > 0) { n++; cur = widths[i]; } else cur += add;
       }
-      if (widths.some((w) => w > maxW) || n > maxLines) continue;
+      if (widths.some((w) => w > maxW) || n > maxLines || (maxH && n * size * 1.2 > maxH)) continue;
       const lines = n === 1 ? [words.join(' ')] : balance(words, widths, n);
-      if (lines.every((l) => ctx.measureText(l).width <= maxW)) return { size, lines };
+      if (lines.every((l) => ctx.measureText(l).width <= maxW)) found.push({ size, lines });
     }
-    return { size: 48, lines: [words.join(' ')] };
+    if (!found.length) return { size: 48, lines: [words.join(' ')] };
+    // Largest type wins, but give up to a quarter of the size to keep the name on fewer lines.
+    const top = found[0].size;
+    const ok = found.filter((f) => f.size >= top * 0.75);
+    ok.sort((a, b) => a.lines.length - b.lines.length || b.size - a.size);
+    return ok[0];
   }
 
   /** spec: { name, room, date?, start?, end? }   opts: { theme, showDate, createCanvas } */
@@ -87,14 +110,25 @@
     ctx.fillStyle = th.bg;
     ctx.fillRect(0, 0, Sign.W, Sign.H);
 
+    // --- optional Hotel Illinois lockup + accent rule across the top
+    if (th.logo && Sign._logo) {
+      const lw = (th.logo.h * IH.LOGO.w) / IH.LOGO.h;
+      ctx.drawImage(Sign._logo, (Sign.W - lw) / 2, th.logo.y, lw, th.logo.h);
+    }
+    if (th.rule) {
+      ctx.fillStyle = th.rule.color;
+      ctx.fillRect((Sign.W - th.rule.w) / 2, th.rule.y, th.rule.w, th.rule.h);
+    }
+
     // --- event name, centered in the space above the bar
-    const { size, lines } = fitTitle(ctx, spec.name, 1800, 3);
+    const weight = th.weight || 500;
+    const { size, lines } = fitTitle(ctx, spec.name, 1800, 3, weight, th.titleMaxH);
     const pitch = size * 1.2;
-    const cy = 488; // matches the sample sign's optical center
+    const cy = th.titleCy || 488; // classic: matches the sample sign's optical center
     const top = cy - (lines.length * pitch) / 2;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.font = `500 ${size}px ${Sign.FONT}`;
+    ctx.font = `${weight} ${size}px ${Sign.FONT}`;
     ctx.fillStyle = th.text;
     if (th.shadow) { ctx.shadowColor = th.shadow; ctx.shadowBlur = 6; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4; }
     lines.forEach((l, i) => ctx.fillText(l, Sign.W / 2, top + i * pitch + pitch / 2 + size * 0.35));
@@ -103,7 +137,7 @@
 
     if (opts.showDate && spec.date) {
       const sub = `${U.fmtLong(spec.date)}${spec.start ? '   ' + U.fmtRange(spec.start, spec.end, true) : ''}`;
-      ctx.font = `500 46px ${Sign.FONT}`;
+      ctx.font = `${weight} 46px ${Sign.FONT}`;
       ctx.fillStyle = th.text;
       ctx.globalAlpha = 0.7;
       ctx.fillText(sub, Sign.W / 2, Math.min(850, top + lines.length * pitch + 52));
@@ -125,7 +159,7 @@
     ctx.textAlign = 'left';
     ctx.fillStyle = th.roomText;
     for (; rs > 48; rs -= 4) {
-      ctx.font = `500 ${rs}px ${Sign.FONT}`;
+      ctx.font = `${th.roomWeight || 500} ${rs}px ${Sign.FONT}`;
       if (ctx.measureText(spec.room || '').width <= Sign.W - 40) break;
     }
     if (th.shadow) { ctx.shadowColor = th.shadow; ctx.shadowBlur = 6; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4; }

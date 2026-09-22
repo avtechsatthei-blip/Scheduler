@@ -12,7 +12,7 @@
       const n = (ev.items || []).reduce((a, i) => a + (+i.qty || 0), 0);
       if (n) chips.push(`<span class="tag info">${n} AV item${n > 1 ? 's' : ''}</span>`);
     }
-    if (ev.tech && ev.tech.count) chips.push(`<span class="tag navy">${ev.tech.count}× in-room tech</span>`);
+    if (IH.Sched.techPeak(ev)) chips.push(`<span class="tag navy">${esc(IH.Sched.techText(ev))}</span>`);
     if (ev.review) chips.push('<span class="tag warn">Review</span>');
     let crew = '';
     if (sched) {
@@ -34,7 +34,8 @@
     render() {
       const st = Store.state, wk = UI.weekKey;
       const dates = U.weekDates(wk);
-      const evs = Store.eventsInWeek(wk);
+      const evs = Store.eventsInWeek(wk); // whole week: used for the numbers above the board
+      const shown = evs.filter((e) => UI.evMatches(e));
       const sched = st.schedules[wk] || null;
       const reqs = IH.Sched.requirements(st, wk);
       const inv = IH.Inv.analyze(st, wk);
@@ -78,13 +79,14 @@
       if (rev.length > 3) needs.push(['warn', 'file', `${rev.length - 3} more imported events to check.`, 'events']);
 
       const todayIso = U.today();
-      const days = dates.map((d) => {
-        const list = evs.filter((e) => e.date === d);
+      const showDates = UI.filter.day ? [UI.filter.day] : dates;
+      const days = showDates.map((d) => {
+        const list = shown.filter((e) => e.date === d);
         const crew = sched ? [...new Set(sched.shifts.filter((x) => x.date === d && x.staffId).map((x) => x.staffId))] : [];
         return `<div class="day ${d === todayIso ? 'today' : ''} ${list.length ? '' : 'quiet'}">
           <div class="dh"><span class="dn">${U.parseDate(d).getDate()}</span><span class="dw">${U.DOW[U.dow(d)]}</span>
             <button class="btn ghost icon xs add noprint" data-act="ev-new" data-date="${d}" title="Add event on ${U.fmtDay(d)}">${ic('plus', 'sm')}</button></div>
-          <div class="list">${list.length ? list.map((e) => UI.eventCard(e, sched)).join('') : '<div class="none">No events</div>'}
+          <div class="list">${list.length ? list.map((e) => UI.eventCard(e, sched)).join('') : `<div class="none">${UI.filterActive() ? 'No matching events' : 'No events'}</div>`}
           ${crew.length && list.length ? `<div class="tiny muted" style="margin-top:2px">Working: ${crew.map((id) => esc((Store.staffById(id) || { name: '?' }).name.split(' ')[0])).join(', ')}</div>` : ''}</div></div>`;
       }).join('');
 
@@ -100,7 +102,8 @@
           ${stat('In-room tech billing', bill.total ? UI.money(bill.total) : '—', bill.total ? `${Math.round(bill.hours * 10) / 10} tech-hours at ${UI.money(st.settings.techRate)}/hr` : 'No in-room tech booked', 'info')}
         </div>
         ${needs.length ? `<div class="col" style="gap:8px;margin-bottom:20px">${needs.map(([lv, i, t, go]) => `<div class="callout ${lv}">${ic(i)}<div class="grow">${esc(t)}</div><button class="btn xs" data-act="${go.startsWith('ev:') ? 'ev-edit' : 'go'}" data-id="${go.slice(3)}" data-view="${go}">${go.startsWith('ev:') ? 'Open' : 'Open'}</button></div>`).join('')}</div>` : ''}
-        <div class="board">${days}</div>
+        ${UI.filterBar({ days: 'week', info: UI.filterActive() ? `Showing ${shown.length} of ${evs.length} events` : '' })}
+        <div class="board ${UI.filter.day ? 'one' : ''}">${days}</div>
         <div class="row wrap noprint" style="margin-top:22px">
           <button class="btn" data-act="week-pptx">${ic('deck', 'sm')} Export this week to PowerPoint</button>
           <button class="btn" data-act="go" data-view="signs">${ic('image', 'sm')} Room signs</button>

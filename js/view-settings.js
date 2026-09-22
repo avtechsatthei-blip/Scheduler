@@ -38,8 +38,9 @@
           <div class="span-3 keep-half">${UI.field('New event ends', `<input class="in" type="time" value="${s.defaultEnd}" data-change="set" data-key="defaultEnd" data-kind="str">`)}</div>
           <div class="span-4">${UI.field('Room sign style', `<select class="in" data-change="set" data-key="signTheme" data-kind="str">${Object.entries(IH.Sign.THEMES).map(([k, t]) => UI.opt(k, t.label, s.signTheme === k)).join('')}</select>`)}</div>
           <div class="span-2" style="align-self:end"><label class="check"><input type="checkbox" ${s.signShowDate ? 'checked' : ''} data-change="set" data-key="signShowDate" data-kind="bool"> Date on signs</label></div></div></div>
+        ${IH.Cloud.cardHtml()}
         <div class="card pad"><h3>Your data</h3>
-          <p class="muted small" style="margin:6px 0 12px">Everything is saved in this browser only. Clearing site data or switching computers loses it, so download a backup now and then. ${last ? `Last backup: ${esc(new Date(last).toLocaleString())}.` : '<b>You haven\'t made a backup yet.</b>'}</p>
+          <p class="muted small" style="margin:6px 0 12px">${IH.Cloud.status === 'off' || IH.Cloud.status === 'signed-out' ? 'Everything is saved in this browser only. Clearing site data or switching computers loses it, so turn on cloud sync above or download a backup now and then.' : 'Your data is saved in this browser and synced to the cloud. A backup file is still a good safety net.'} ${last ? `Last backup: ${esc(new Date(last).toLocaleString())}.` : '<b>You haven\'t made a backup yet.</b>'}</p>
           <div class="row wrap"><button class="btn navy" data-act="backup-dl">${ic('download', 'sm')} Download backup</button>
             <label class="btn">${ic('upload', 'sm')} Restore from backup<input type="file" accept="application/json,.json" data-change="backup-load" hidden></label>
             <button class="btn" data-act="load-sample-now">${ic('sparkle', 'sm')} Load sample week</button>

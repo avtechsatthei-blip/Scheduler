@@ -44,31 +44,46 @@
   ];
   // Placeholder quantities — the first-run screen asks you to replace these with your real counts.
   const INVENTORY_SEED = [
-    ['Projector', 6, 150],
-    ['Screen', 6, 60],
-    ['Podium', 4, 40],
-    ['Wired Mic', 6, 35],
-    ['CC Laptop', 4, 75],
-    ['HDMI', 8, 0],
-    ['Riser', 6, 0],
-    ['Step', 4, 0],
-    ['360 Camera', 1, 0],
+    // name, qty, rent $/day, category
+    ['Projector', 6, 150, 'Video'],
+    ['Screen', 6, 60, 'Video'],
+    ['Podium', 4, 40, 'Staging'],
+    ['Wired Mic', 6, 35, 'Audio'],
+    ['CC Laptop', 4, 75, 'Computers'],
+    ['HDMI', 8, 0, 'Cables & adapters'],
+    ['Riser', 6, 0, 'Staging'],
+    ['Step', 4, 0, 'Staging'],
+    ['360 Camera', 1, 0, 'Video'],
   ];
+  let ordSeq = 0;
+  const nextOrd = () => Date.now() * 1000 + (ordSeq++ % 1000); // increasing, so new records sort after old ones on every device
+  const CONDITIONS = ['Good', 'Fair', 'Needs repair', 'Retired'];
+  const CATEGORIES = ['Video', 'Audio', 'Lighting', 'Computers', 'Cables & adapters', 'Staging', 'Power', 'Other'];
+
+  function newItem(over) {
+    if (over) over = Object.fromEntries(Object.entries(over).filter(([, v]) => v !== undefined)); // an undefined id must not wipe the fresh one
+    return Object.assign(
+      { id: U.uid('inv'), name: '', category: '', model: '', assetTag: '', serial: '', location: '', qty: 1, out: 0, condition: 'Good', purchased: '', value: '', rentable: false, rentCost: 0, notes: '', lastAudit: '', ord: nextOrd() },
+      over || {}
+    );
+  }
 
   function baseState() {
     return {
       version: 1,
       settings: U.clone(DEFAULT_SETTINGS),
       staff: [],
-      rooms: ROOM_SEED.map((r) => ({
+      rooms: ROOM_SEED.map((r, i) => ({
         id: r.id,
         name: r.name,
         aliases: r.aliases,
         items: r.items.map(([name, qty]) => ({ name, qty, builtIn: false })),
         notes: '',
+        ord: i,
       })),
-      inventory: INVENTORY_SEED.map(([name, qty, rentCost]) => ({ id: U.uid('inv'), name, qty, rentable: true, rentCost, notes: '' })),
+      inventory: INVENTORY_SEED.map(([name, qty, rentCost, category], i) => newItem({ name, qty, rentable: true, rentCost, category, ord: i })),
       events: [],
+      audits: [], // monthly equipment audits
       schedules: {}, // weekKey -> { shifts:[], optionName, savedAt }
       meta: { firstRun: true, sampleLoaded: false },
     };
@@ -78,7 +93,7 @@
     const avail = {};
     for (let i = 0; i < 7; i++) avail[i] = { on: true, from: '', to: '' };
     return Object.assign(
-      { id: U.uid('st'), name: 'New staff', role: 'AV tech', color: U.STAFF_COLORS[0], active: true, minWeek: 0, maxWeek: null, canTech: true, avail, daysOff: [], notes: '' },
+      { id: U.uid('st'), ord: nextOrd(), name: 'New staff', role: 'AV tech', color: U.STAFF_COLORS[0], active: true, minWeek: 0, maxWeek: null, canTech: true, avail, daysOff: [], notes: '' },
       over || {}
     );
   }
@@ -151,6 +166,10 @@
     state: null,
     listeners: [],
     newStaff,
+    newItem,
+    nextOrd,
+    CONDITIONS,
+    CATEGORIES,
     DEFAULT_SETTINGS,
 
     load() {
@@ -168,22 +187,35 @@
       if (!saved || typeof saved !== 'object') return base;
       const s = Object.assign(base, saved);
       s.settings = Object.assign({}, DEFAULT_SETTINGS, saved.settings || {});
-      s.staff = (saved.staff || []).map((x) => {
+      s.staff = (saved.staff || []).map((x, i) => {
         const n = newStaff(x);
+        if (x.ord == null) n.ord = i;
         for (let i = 0; i < 7; i++) n.avail[i] = Object.assign({ on: true, from: '', to: '' }, (x.avail || {})[i] || {});
         return n;
       });
       s.events = (saved.events || []).map((e) => Object.assign({ items: [], tech: { count: 0, start: '', end: '' }, noAV: false }, e));
+      if (saved.rooms) s.rooms = saved.rooms.map((r, i) => Object.assign({ aliases: [], items: [], notes: '', ord: i }, r, { items: r.items || [], aliases: r.aliases || [] }));
+      s.rooms.forEach((r, i) => { if (r.ord == null) r.ord = i; });
+      if (saved.inventory) s.inventory = saved.inventory.map((x, i) => newItem(Object.assign({ ord: i }, x)));
+      s.audits = (saved.audits || []).map((a) => Object.assign({ lines: [], extras: [], status: 'open' }, a));
       s.schedules = saved.schedules || {};
       s.meta = Object.assign({ firstRun: false }, saved.meta || {});
       return s;
     },
-    save() {
+    hooks: { save: [] }, // the cloud layer listens here
+    save(silent) {
       try {
         localStorage.setItem(KEY, JSON.stringify(Store.state));
       } catch (e) {
         console.warn('Could not save', e);
       }
+      if (!silent) Store.hooks.save.forEach((f) => f());
+    },
+    // Used by cloud sync: swap in data that came from the server without echoing it back.
+    replaceState(next) {
+      Store.state = Store.normalize(next);
+      Store.save(true);
+      Store.listeners.forEach((f) => f());
     },
     update(fn) {
       fn(Store.state);

@@ -8,6 +8,33 @@
   /* =====================================================================
    * 1. What has to be covered
    * ===================================================================== */
+  // In-room tech times. An event either needs `count` techs for the whole event (or one From/To slice),
+  // or has its own list of times: tech.windows = [{ start, end, count }].
+  S.techRaw = (ev) => {
+    const t = (ev && ev.tech) || {};
+    if (Array.isArray(t.windows) && t.windows.length) {
+      return t.windows.filter((w) => w.start && w.end && w.end > w.start && (+w.count || 0) > 0).map((w) => ({ start: w.start, end: w.end, count: Math.min(9, Math.round(+w.count)) }));
+    }
+    return (+t.count || 0) > 0 ? [{ start: t.start || '', end: t.end || '', count: +t.count }] : [];
+  };
+  // Same, in minutes, with the before/after buffers from Settings added.
+  S.techWindows = (ev, st) => {
+    const base = S.eventWindow(ev, st);
+    return S.techRaw(ev).map((w) => ({
+      s: w.start ? Math.max(0, U.toMin(w.start) - st.bufferBeforeMin) : base[0],
+      e: w.end ? Math.min(1440, U.toMin(w.end) + st.bufferAfterMin) : base[1],
+      count: w.count,
+    })).filter((w) => w.e > w.s);
+  };
+  S.techPeak = (ev) => S.techRaw(ev).reduce((m, w) => Math.max(m, w.count), 0);
+  // Short text for cards and exports, e.g. "2× in-room tech" or "Tech 9:00 AM–10:00 AM, 2× 1:00 PM–3:30 PM".
+  S.techText = (ev) => {
+    const raw = S.techRaw(ev);
+    if (!raw.length) return '';
+    if (raw.length === 1 && !raw[0].start && !raw[0].end) return `${raw[0].count}× in-room tech`;
+    return 'Tech ' + raw.map((w) => `${w.count > 1 ? w.count + '× ' : ''}${U.fmtRange(w.start || ev.start, w.end || ev.end)}`).join(', ');
+  };
+
   S.needsAV = (ev) => !ev.noAV && ((ev.items && ev.items.length > 0) || (ev.tech && ev.tech.count > 0));
 
   // The window staff actually need to be around: event hours plus your before/after buffers.
@@ -85,13 +112,10 @@
       // In-room techs: each one is an extra person for the hours the tech is needed.
       const techIv = [];
       for (const ev of evs) {
-        const count = (ev.tech && ev.tech.count) || 0;
-        if (!count) continue;
-        const base = S.eventWindow(ev, st);
-        const ts = ev.tech.start ? Math.max(0, U.toMin(ev.tech.start) - st.bufferBeforeMin) : base[0];
-        const te = ev.tech.end ? Math.min(1440, U.toMin(ev.tech.end) + st.bufferAfterMin) : base[1];
-        for (let i = 0; i < count; i++) {
-          for (const [cs, ce] of splitChunks(ts, te, maxMin, st.handoffMin)) techIv.push({ s: cs, e: ce, ev });
+        for (const w of S.techWindows(ev, st)) {
+          for (let i = 0; i < w.count; i++) {
+            for (const [cs, ce] of splitChunks(w.s, w.e, maxMin, st.handoffMin)) techIv.push({ s: cs, e: ce, ev });
+          }
         }
       }
       let t = 0;
@@ -484,12 +508,7 @@
       for (const ev of evs) {
         const [a, b] = S.eventWindow(ev, st);
         for (let m = a; m < b; m++) baseNeed[m] = Math.max(1, st.baseCrew);
-        const c = (ev.tech && ev.tech.count) || 0;
-        if (c) {
-          const ts = ev.tech.start ? Math.max(0, U.toMin(ev.tech.start) - st.bufferBeforeMin) : a;
-          const te = ev.tech.end ? Math.min(1440, U.toMin(ev.tech.end) + st.bufferAfterMin) : b;
-          for (let m = ts; m < te; m++) techNeed[m] += c;
-        }
+        for (const w of S.techWindows(ev, st)) for (let m = w.s; m < w.e; m++) techNeed[m] += w.count;
       }
       const dayShifts = shifts.filter((s) => s.date === date).map(norm);
       const scan = (need, kind, label) => {
@@ -519,12 +538,12 @@
     const st = state.settings;
     let hours = 0, total = 0;
     for (const ev of S.eventsIn(state, weekKey)) {
-      const c = (ev.tech && ev.tech.count) || 0;
-      if (!c) continue;
-      const s = U.toMin(ev.tech.start || ev.start), e = U.toMin(ev.tech.end || ev.end);
-      const h = Math.max(st.techMinBillHrs, (e - s) / 60);
-      hours += h * c;
-      total += h * c * st.techRate;
+      const raw = S.techRaw(ev);
+      if (!raw.length) continue;
+      const worked = raw.reduce((t, w) => t + (((U.toMin(w.end || ev.end) - U.toMin(w.start || ev.start)) / 60) * w.count), 0);
+      const h = Math.max(st.techMinBillHrs * S.techPeak(ev), worked); // the minimum applies per tech
+      hours += h;
+      total += h * st.techRate;
     }
     return { hours, total };
   };
