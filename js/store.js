@@ -22,6 +22,7 @@
     defaultStart: '08:00', // used when a PDF has no readable times
     defaultEnd: '17:00',
     signTheme: 'classic', // classic | brand
+    brightsignFolder: '', // '' = IH.BrightSign.DEFAULT_FOLDER
     signShowDate: false,
   };
 
