@@ -20,18 +20,27 @@
   }
 
   function fieldsHtml(th) {
+    const hasLogo = !!th.logo;
     return `<div class="sdes">
       <div class="sdes-logo">
-        <div class="logopv" id="sd-logopv">${th.logo ? `<img src="${th.logo.src}" alt="Logo">` : `<span class="muted small">No logo yet</span>`}</div>
+        <div class="logopv" id="sd-logopv">${hasLogo ? `<img src="${th.logo.src}" alt="Logo">` : `<span class="muted small">No logo yet</span>`}</div>
         <div class="col" style="gap:8px">
-          <label class="btn sm">${ic('upload', 'sm')} ${th.logo ? 'Replace logo' : 'Upload logo'}<input type="file" accept="image/*" id="sd-logofile" hidden></label>
-          ${th.logo ? `<button class="btn ghost sm" type="button" id="sd-logormv">${ic('x', 'sm')} Remove logo</button>` : ''}
-          <button class="btn sm" type="button" id="sd-match" ${th.logo ? '' : 'disabled'} title="${th.logo ? '' : 'Upload a logo first'}">${ic('wand', 'sm')} Match colors to logo</button>
+          <label class="btn sm">${ic('upload', 'sm')} ${hasLogo ? 'Replace logo' : 'Upload logo'}<input type="file" accept="image/*" id="sd-logofile" hidden></label>
+          ${hasLogo ? `<button class="btn ghost sm" type="button" id="sd-logormv">${ic('x', 'sm')} Remove logo</button>` : ''}
+          <button class="btn sm" type="button" id="sd-match" ${hasLogo ? '' : 'disabled'} title="${hasLogo ? '' : 'Upload a logo first'}">${ic('wand', 'sm')} Match colors to logo</button>
           <div class="swatches sm" id="sd-swatches"></div>
+          <div class="row wrap" style="gap:10px">
+            ${UI.field('Logo size', `<input class="in sm num" type="number" min="30" max="500" step="2" id="sd-logo-h" value="${hasLogo ? th.logo.h : 132}" ${hasLogo ? '' : 'disabled'} style="max-width:84px">`, 'Height, px')}
+            ${UI.field('Logo position', `<input class="in sm num" type="number" min="0" max="900" step="2" id="sd-logo-y" value="${hasLogo ? th.logo.y : 62}" ${hasLogo ? '' : 'disabled'} style="max-width:84px">`, 'From the top, px')}
+          </div>
         </div>
       </div>
       <div class="row wrap" style="gap:16px 22px;margin-top:16px">${ROLES.map(([role, label]) => colorField(role, label, th[role])).join('')}</div>
       <label class="check" style="margin-top:12px"><span class="switch"><input type="checkbox" id="sd-bold" ${(th.weight || 500) >= 600 ? 'checked' : ''}><i></i></span> Bold text</label>
+      <div class="row wrap" style="gap:10px;margin-top:12px">
+        ${UI.field('Text size', `<input class="in sm num" type="number" min="24" max="220" step="2" id="sd-text-size" value="${th.titleSize || 144}" style="max-width:84px">`, 'Largest it will print, px')}
+        ${UI.field('Text position', `<input class="in sm num" type="number" min="80" max="850" step="2" id="sd-text-y" value="${th.titleCy != null ? th.titleCy : 488}" style="max-width:84px">`, 'Vertical center, px from the top')}
+      </div>
       <div class="preview" id="sd-preview" style="margin-top:14px;max-width:420px"></div>
     </div>`;
   }
@@ -53,7 +62,7 @@
     }
     function setColor(role, hex) {
       th[role] = hex;
-      if (role === 'strip' && th.rule) th.rule.color = hex;
+      Store.laySignTheme(th); // keeps the accent rule's color following the strip
       const c = UI.$(`[data-c="${role}"]`, el), h = UI.$(`[data-h="${role}"]`, el);
       if (c) c.value = hex;
       if (h) h.value = hex.toUpperCase();
@@ -64,6 +73,10 @@
       const t = e.target;
       if (t.dataset.c) setColor(t.dataset.c, t.value);
       if (t.dataset.h) { const v = t.value.trim(); if (/^#[0-9a-f]{6}$/i.test(v)) setColor(t.dataset.h, v); }
+      if (t.id === 'sd-logo-h' && th.logo) { th.logo.h = Math.max(10, +t.value || 132); onDirty && onDirty(); redraw(); }
+      if (t.id === 'sd-logo-y' && th.logo) { th.logo.y = Math.max(0, +t.value || 0); onDirty && onDirty(); redraw(); }
+      if (t.id === 'sd-text-size') { th.titleSize = Math.max(10, +t.value || 144); onDirty && onDirty(); redraw(); }
+      if (t.id === 'sd-text-y') { th.titleCy = Math.max(0, +t.value || 0); onDirty && onDirty(); redraw(); }
     });
     el.addEventListener('click', (e) => {
       const sw = e.target.closest('[data-swatch]');
@@ -75,10 +88,11 @@
       if (!f) return;
       if (!/^image\//.test(f.type)) { UI.toast('That file is not an image', 'bad'); return; }
       try {
+        const hadLogo = !!th.logo;
         const src = await U.fileToDataURL(f);
         const img = await U.loadImage(src);
-        th.logo = { src, h: 132, y: 62 };
-        Store.laySignTheme(th);
+        th.logo = { src, h: hadLogo ? th.logo.h : 132, y: hadLogo ? th.logo.y : 62 }; // keep size/position when just swapping the image
+        Store.layoutForLogo(th, hadLogo);
         Sign._logoCache[src] = img;
         const palette = Sign.extractPalette(img);
         setSwatches(palette);
@@ -87,6 +101,10 @@
         matchBtn.disabled = false;
         matchBtn.title = '';
         if (!UI.$('#sd-logormv', el)) matchBtn.insertAdjacentHTML('beforebegin', `<button class="btn ghost sm" type="button" id="sd-logormv">${ic('x', 'sm')} Remove logo</button>`);
+        const hInput = UI.$('#sd-logo-h', el), yInput = UI.$('#sd-logo-y', el), tyInput = UI.$('#sd-text-y', el);
+        if (hInput) { hInput.disabled = false; hInput.value = th.logo.h; }
+        if (yInput) { yInput.disabled = false; yInput.value = th.logo.y; }
+        if (tyInput && !hadLogo) tyInput.value = th.titleCy;
         onDirty && onDirty();
         redraw();
       } catch (err) { console.error(err); UI.toast('Could not read that image', 'bad'); }
@@ -94,13 +112,17 @@
     el.addEventListener('click', (e) => {
       if (e.target.closest('#sd-logormv')) {
         th.logo = null;
-        Store.laySignTheme(th);
+        Store.layoutForLogo(th, true);
         UI.$('#sd-logopv', el).innerHTML = '<span class="muted small">No logo yet</span>';
         e.target.closest('#sd-logormv').remove();
         const matchBtn = UI.$('#sd-match', el);
         matchBtn.disabled = true;
         matchBtn.title = 'Upload a logo first';
         setSwatches([]);
+        const hInput = UI.$('#sd-logo-h', el), yInput = UI.$('#sd-logo-y', el), tyInput = UI.$('#sd-text-y', el);
+        if (hInput) hInput.disabled = true;
+        if (yInput) yInput.disabled = true;
+        if (tyInput) tyInput.value = th.titleCy;
         onDirty && onDirty();
         redraw();
       }
@@ -119,6 +141,10 @@
     redraw();
     return { redraw };
   }
+  // Exposed so other screens (the Advanced time-slot composer) can build a custom design inline
+  // without duplicating this logic.
+  SD.fieldsHtml = fieldsHtml;
+  SD.wireFields = wire;
 
   /* ---------------- library: create / edit a saved design ---------------- */
   SD.openLibraryEditor = (existing) => {

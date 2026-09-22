@@ -163,11 +163,13 @@
     return lines;
   }
 
-  function fitTitle(ctx, text, maxW, maxLines, weight, maxH) {
+  function fitTitle(ctx, text, maxW, maxLines, weight, maxH, maxSize) {
+    maxSize = maxSize || 144;
+    const floor = Math.min(48, maxSize);
     const words = String(text || '').trim().split(/\s+/).filter(Boolean);
-    if (!words.length) return { size: 144, lines: [''] };
+    if (!words.length) return { size: maxSize, lines: [''] };
     const found = [];
-    for (let size = 144; size >= 48; size -= 4) {
+    for (let size = maxSize; size >= floor; size -= 4) {
       ctx.font = `${weight || 500} ${size}px ${Sign.FONT}`;
       const widths = words.map((w) => ctx.measureText(w).width);
       widths.space = ctx.measureText(' ').width;
@@ -181,7 +183,7 @@
       const lines = n === 1 ? [words.join(' ')] : balance(words, widths, n);
       if (lines.every((l) => ctx.measureText(l).width <= maxW)) found.push({ size, lines });
     }
-    if (!found.length) return { size: 48, lines: [words.join(' ')] };
+    if (!found.length) return { size: floor, lines: [words.join(' ')] };
     // Largest type wins, but give up to a quarter of the size to keep the name on fewer lines.
     const top = found[0].size;
     const ok = found.filter((f) => f.size >= top * 0.75);
@@ -212,7 +214,7 @@
 
     // --- event name, centered in the space above the bar
     const weight = th.weight || 500;
-    const { size, lines } = fitTitle(ctx, spec.name, 1800, 3, weight, th.titleMaxH);
+    const { size, lines } = fitTitle(ctx, spec.name, 1800, 3, weight, th.titleMaxH, th.titleSize);
     const pitch = size * 1.2;
     const cy = th.titleCy || 488; // classic: matches the sample sign's optical center
     const top = cy - (lines.length * pitch) / 2;

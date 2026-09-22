@@ -77,16 +77,29 @@
       {
         id: U.uid('sthm'), name: 'New design', bg: '#FFFFFF', text: '#10294B', shadow: null, weight: 500, roomWeight: 500,
         bar: '#10294B', barLine: '#10294B', roomText: '#FFFFFF', strip: '#F15A32', stripLine: '#F15A32',
-        logo: null, rule: null, titleCy: 488, titleMaxH: null, ord: nextOrd(),
+        logo: null, rule: null, titleCy: 488, titleMaxH: null, titleSize: 144, ord: nextOrd(),
       },
       over || {}
     );
   }
-  // Recompute the layout fields (title position, accent rule) after the logo or strip color changes.
+  // Keeps the accent rule's color following the strip color. Logo size/position and the title's size
+  // and vertical position are each independently adjustable, so this never touches them — call
+  // layoutForLogo() below at the moment a logo is actually added or removed instead.
   function laySignTheme(th) {
-    if (th.logo) { th.titleCy = 566; th.titleMaxH = 600; th.rule = { y: 240, w: 132, h: 6, color: th.strip }; }
-    else { th.titleCy = 488; th.titleMaxH = null; th.rule = null; }
+    if (th.rule) th.rule.color = th.strip;
     return th;
+  }
+  // Sensible one-time defaults for where the logo and title sit, applied only when a logo is newly
+  // added (giving room for it up top) or removed (title returns to the classic centered spot). Existing
+  // custom positions are left alone on every other edit.
+  function layoutForLogo(th, hadLogoBefore) {
+    if (th.logo && !hadLogoBefore) {
+      if (!th.rule) th.rule = { y: 240, w: 132, h: 6, color: th.strip };
+      th.titleCy = 566; th.titleMaxH = 600;
+    } else if (!th.logo && hadLogoBefore) {
+      th.rule = null; th.titleCy = 488; th.titleMaxH = null;
+    }
+    return laySignTheme(th);
   }
 
   function baseState() {
@@ -191,6 +204,7 @@
     newItem,
     newSignTheme,
     laySignTheme,
+    layoutForLogo,
     nextOrd,
     CONDITIONS,
     CATEGORIES,

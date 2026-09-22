@@ -2,6 +2,7 @@
 (function (root) {
   const IH = root.IH, U = IH.U, UI = IH.UI, Store = IH.Store, Sign = IH.Sign;
   const { esc, icon: ic } = UI;
+  const JSZIP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
   const mem = (UI.mem.signs = { scope: 'week', day: '', theme: null, showDate: null, merge: true, sel: new Set(), custom: { name: '', room: '', override: null }, current: null });
 
   const theme = () => mem.theme || Store.state.settings.signTheme || 'classic';
@@ -80,7 +81,8 @@
             <div class="signrow ${mem.current === '__custom' ? 'sel' : ''}" data-act="sign-pick" data-key="__custom"><span style="width:17px">${ic('plus', 'sm')}</span><div class="grow"><b style="color:var(--navy)">Custom sign</b>${Sign.hasOverride(mem.custom.override) ? '<span class="sign-badge">Customized</span>' : ''}<div class="small muted">Type any name and room</div></div>
               <button type="button" class="rowbtn" data-act="sign-customize" data-key="__custom" title="Customize this sign">${ic('edit', 'sm')}</button></div></div>
           <div class="row wrap" style="margin-top:12px;gap:8px"><button class="btn sm" data-act="sign-all">${selN ? 'Clear selection' : 'Select all'}</button>
-            <button class="btn sm navy" data-act="sign-zip" ${selN ? '' : 'disabled'}>${ic('download', 'sm')} Download ${selN || ''} selected</button></div></div>
+            <button class="btn sm navy" data-act="sign-zip" ${selN ? '' : 'disabled'}>${ic('download', 'sm')} Download ${selN || ''} selected</button>
+            <button class="btn sm" data-act="sign-zip-bs" ${selN ? '' : 'disabled'}>${ic('download', 'sm')} Download ${selN || ''} selected for BrightSign</button></div></div>
         <div><div id="cust" class="${mem.current === '__custom' ? '' : 'hide'} card pad" style="margin-bottom:14px"><div class="form-grid">
           <div class="span-12">${UI.field('Sign text', `<input class="in" id="c-name" value="${esc(mem.custom.name)}" placeholder="Event name" data-input="sign-custom">`)}</div>
           <div class="span-12">${UI.field('Room', `<input class="in" id="c-room" list="dl-rooms" value="${esc(mem.custom.room)}" placeholder="Room name" data-input="sign-custom"><datalist id="dl-rooms">${Store.state.rooms.map((r) => `<option value="${esc(r.name)}">`).join('')}</datalist>`)}</div></div></div>
@@ -161,7 +163,7 @@
     if (!ent || !IH.BrightSign) return;
     el.disabled = true;
     try {
-      await IH.Imp.loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+      await IH.Imp.loadScript(JSZIP_URL);
       const canvas = await makeCanvas(ent);
       const base = fname(ent).replace(/\.png$/i, '');
       const built = await IH.BrightSign.build(canvas, base, Store.state.settings.brightsignFolder);
@@ -176,7 +178,7 @@
     if (chosen.length === 1) { U.download(await toBlob(chosen[0]), fname(chosen[0])); return; }
     el.disabled = true;
     try {
-      await IH.Imp.loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+      await IH.Imp.loadScript(JSZIP_URL);
       const zip = new root.JSZip();
       const used = new Set();
       for (const ent of chosen) {
@@ -189,6 +191,30 @@
       U.download(blob, `room-signs_${UI.weekKey}.zip`);
       UI.toast(`Downloaded ${chosen.length} signs`, 'ok');
     } catch (e) { console.error(e); UI.toast('Could not make the ZIP: ' + e.message + '. You can still download signs one at a time.', 'bad'); }
+    el.disabled = false;
+  };
+  UI.Acts['sign-zip-bs'] = async (el) => {
+    const chosen = entries().filter((x) => mem.sel.has(x.key));
+    if (!chosen.length || !IH.BrightSign) return;
+    el.disabled = true;
+    try {
+      await IH.Imp.loadScript(JSZIP_URL);
+      const zip = new root.JSZip();
+      const used = new Set();
+      const folder = Store.state.settings.brightsignFolder;
+      for (const ent of chosen) {
+        const canvas = await makeCanvas(ent);
+        let base = fname(ent).replace(/\.png$/i, '');
+        if (used.has(base)) base += '_' + used.size;
+        used.add(base);
+        const built = await IH.BrightSign.build(canvas, base, folder);
+        zip.file(built.filename, built.json);
+        zip.file(built.pngFilename, built.pngBlob);
+      }
+      const blob = await zip.generateAsync({ type: 'blob' });
+      U.download(blob, `room-signs-brightsign_${UI.weekKey}.zip`);
+      UI.toast(`Downloaded ${chosen.length} signs for BrightSign`, 'ok');
+    } catch (e) { console.error(e); UI.toast('Could not build the BrightSign files: ' + e.message, 'bad'); }
     el.disabled = false;
   };
 })(typeof window !== 'undefined' ? window : globalThis);
