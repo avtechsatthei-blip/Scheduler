@@ -64,6 +64,7 @@
       'auth/too-many-requests': 'Too many tries. Wait a few minutes and try again.',
       'auth/network-request-failed': 'No internet connection.',
       'auth/operation-not-allowed': 'Email sign-in is not turned on in Firebase yet (Authentication, Sign-in method, Email/Password).',
+      'auth/configuration-not-found': 'This Firebase project has no sign-in method set up yet. In the Firebase console, go to Authentication, click "Get started" if you see it, then turn on Email/Password under Sign-in method.',
     };
     return m[code] || (e && e.message) || 'Something went wrong.';
   };
