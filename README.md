@@ -68,10 +68,10 @@ Search, room buttons and a day picker sit above This week, Events, Schedule and 
 
 Cloud sync keeps a copy of everything in a Firebase Realtime Database so you can open the app on any computer, tablet or phone. Each browser still keeps its own copy, so the app works offline and catches up when you reconnect. Changes to different items on two devices merge automatically. If the very same item is edited on two devices at once, the cloud's version is kept and you're told.
 
-One-time setup, in the Firebase console for your project (the app is pre-set to the same project as the iHotel messaging app; to use another project, put its web keys in `js/cloud-config.js`):
+One-time setup, in the Firebase console for your project (the app is pre-set to its own dedicated Firebase project, `ihotelscheduler`, separate from the iHotel messaging app; to use a different project, put its web keys in `js/cloud-config.js`):
 
 1. **Authentication, Sign-in method**: turn on **Email/Password**.
-2. **Realtime Database, Rules**: add the two blocks from `firebase-rules.json` inside your existing `"rules"` object (don't replace the rules your messaging app uses), then **Publish**.
+2. **Realtime Database**: create the database if you haven't yet, then in **Rules** paste the full contents of `firebase-rules.json` (this project's database is dedicated to the scheduler, so there's nothing else to preserve), then **Publish**.
 3. In the app: **Settings, Cloud sync**, enter an email and password, press **Create account**.
 4. The app shows an account ID and says it needs approval. In **Realtime Database, Data**, add a top-level child `avSchedulerAllowed`, and inside it a child named with that ID and the value `true`. Back in the app press **Check again**. Repeat for each person or device account you want to allow.
 5. On your next device, sign in with the same email and password.
