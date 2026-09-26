@@ -118,10 +118,12 @@
 
   // Editable copy of the room sign: same layout as the PNG (1920x1080 px -> 13.333 x 7.5 in). `th` is a
   // resolved theme object (built-in, saved design, or a one-off per-sign design).
-  function signSlide(pptx, spec, th) {
+  function signSlide(pptx, spec, th, opts) {
     const px = 13.333 / 1920;
     const s = pptx.addSlide();
     s.background = { color: hex(th.bg) };
+    const bgImg = th.background && IH.Sign._logoCache[th.background.src];
+    if (th.background && bgImg) s.addImage({ data: IH.Sign.coverImageDataURL(bgImg, 1920, 1080, opts), x: 0, y: 0, w: 13.333, h: 7.5 });
     const logoImg = th.logo && IH.Sign._logoCache[th.logo.src];
     if (th.logo && logoImg) {
       const natW = logoImg.naturalWidth || logoImg.width, natH = logoImg.naturalHeight || logoImg.height;
@@ -187,7 +189,7 @@
         if (seen.has(k)) return; // one sign per room + event name + design, even if it runs several days
         seen.add(k);
         if (opts.signAsImage && typeof document !== 'undefined') signImageSlide(pptx, r.spec, r.theme, opts.signShowDate);
-        else signSlide(pptx, r.spec, r.theme);
+        else signSlide(pptx, r.spec, r.theme, opts);
       });
     }
     return pptx;

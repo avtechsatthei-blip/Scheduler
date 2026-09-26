@@ -40,13 +40,17 @@
       } catch (e) { /* fall back to system font */ }
     }
   };
-  // Decode and cache every logo image a theme (or list of themes) needs, before render() is called.
-  // In Node pass { loadImage } (from the canvas package).
+  // Decode and cache every image (logo, background) a theme (or list of themes) needs, before render()
+  // is called. In Node pass { loadImage } (from the canvas package).
   Sign.preload = async (themes, opts) => {
     const list = (Array.isArray(themes) ? themes : [themes]).filter(Boolean);
-    for (const th of list) {
-      const src = th && th.logo && th.logo.src;
-      if (!src || Sign._logoCache[src]) continue;
+    const srcs = [];
+    list.forEach((th) => {
+      if (th && th.logo && th.logo.src) srcs.push(th.logo.src);
+      if (th && th.background && th.background.src) srcs.push(th.background.src);
+    });
+    for (const src of srcs) {
+      if (Sign._logoCache[src]) continue;
       try {
         if (opts && opts.loadImage) Sign._logoCache[src] = await opts.loadImage(src);
         else if (typeof Image !== 'undefined') {
@@ -200,6 +204,15 @@
     ctx.fillStyle = th.bg;
     ctx.fillRect(0, 0, Sign.W, Sign.H);
 
+    // --- optional background image, cropped to cover the whole sign, drawn under everything else
+    const bgImg = th.background && Sign._logoCache[th.background.src];
+    if (th.background && bgImg) {
+      const bw = bgImg.naturalWidth || bgImg.width, bh = bgImg.naturalHeight || bgImg.height;
+      const scale = Math.max(Sign.W / bw, Sign.H / bh);
+      const dw = bw * scale, dh = bh * scale;
+      ctx.drawImage(bgImg, (Sign.W - dw) / 2, (Sign.H - dh) / 2, dw, dh);
+    }
+
     // --- optional logo + accent rule across the top
     const logoImg = th.logo && Sign._logoCache[th.logo.src];
     if (th.logo && logoImg) {
@@ -272,6 +285,18 @@
   };
 
   Sign.toBlob = (canvas) => new Promise((res) => canvas.toBlob(res, 'image/png'));
+
+  // A background image, cropped to exactly cover a WxH box (same "cover" fit as render() uses), as a
+  // data URL — for embedding in the editable-text PowerPoint slide, whose addImage stretches instead
+  // of cropping, so the crop has to happen ourselves first.
+  Sign.coverImageDataURL = (img, w, h, opts) => {
+    const natW = img.naturalWidth || img.width, natH = img.naturalHeight || img.height;
+    const scale = Math.max(w / natW, h / natH);
+    const dw = natW * scale, dh = natH * scale;
+    const canvas = opts && opts.createCanvas ? opts.createCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+    canvas.getContext('2d').drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+    return canvas.toDataURL('image/png');
+  };
   // Military time with no colon (e.g. "16:50" -> "1650"), for filenames — sorts and scans cleanly.
   const military = (t) => (t ? String(t).replace(':', '') : '');
   Sign.filename = (spec) => `${U.slug(spec.room)}__${U.slug(spec.name)}${spec.date ? '__' + spec.date : ''}${spec.end ? '__' + military(spec.end) : ''}.png`;

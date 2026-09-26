@@ -78,7 +78,7 @@
       {
         id: U.uid('sthm'), name: 'New design', bg: '#FFFFFF', text: '#10294B', shadow: null, weight: 500, roomWeight: 500,
         bar: '#10294B', barLine: '#10294B', roomText: '#FFFFFF', strip: '#F15A32', stripLine: '#F15A32',
-        logo: null, rule: null, titleCy: 488, titleMaxH: null, titleSize: 144, ord: nextOrd(),
+        logo: null, background: null, rule: null, titleCy: 488, titleMaxH: null, titleSize: 144, ord: nextOrd(),
       },
       over || {}
     );

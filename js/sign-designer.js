@@ -21,6 +21,7 @@
 
   function fieldsHtml(th) {
     const hasLogo = !!th.logo;
+    const hasBg = !!th.background;
     return `<div class="sdes">
       <div class="sdes-logo">
         <div class="logopv" id="sd-logopv">${hasLogo ? `<img src="${th.logo.src}" alt="Logo">` : `<span class="muted small">No logo yet</span>`}</div>
@@ -33,6 +34,12 @@
             ${UI.field('Logo size', `<input class="in sm num" type="number" min="30" max="500" step="2" id="sd-logo-h" value="${hasLogo ? th.logo.h : 132}" ${hasLogo ? '' : 'disabled'} style="max-width:84px">`, 'Height, px')}
             ${UI.field('Logo position', `<input class="in sm num" type="number" min="0" max="900" step="2" id="sd-logo-y" value="${hasLogo ? th.logo.y : 62}" ${hasLogo ? '' : 'disabled'} style="max-width:84px">`, 'From the top, px')}
           </div>
+        </div>
+        <div class="logopv" id="sd-bgpv">${hasBg ? `<img src="${th.background.src}" alt="Background">` : `<span class="muted small">No background image</span>`}</div>
+        <div class="col" style="gap:8px">
+          <label class="btn sm"><span id="sd-bg-label">${ic('upload', 'sm')} ${hasBg ? 'Replace background' : 'Add background image'}</span><input type="file" accept="image/*" id="sd-bgfile" hidden></label>
+          <button class="btn ghost sm ${hasBg ? '' : 'hide'}" type="button" id="sd-bgrmv">${ic('x', 'sm')} Remove background</button>
+          <span class="small muted" style="max-width:170px" id="sd-bg-note">Fills the whole sign, cropped to fit, behind everything else.${hasBg ? ' The Background color below is unused.' : ''}</span>
         </div>
       </div>
       <div class="row wrap" style="gap:16px 22px;margin-top:16px">${ROLES.map(([role, label]) => colorField(role, label, th[role])).join('')}</div>
@@ -108,6 +115,33 @@
         onDirty && onDirty();
         redraw();
       } catch (err) { console.error(err); UI.toast('Could not read that image', 'bad'); }
+    });
+    UI.$('#sd-bgfile', el).addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      if (!/^image\//.test(f.type)) { UI.toast('That file is not an image', 'bad'); return; }
+      try {
+        const src = await U.fileToDataURL(f);
+        Sign._logoCache[src] = await U.loadImage(src);
+        th.background = { src };
+        UI.$('#sd-bgpv', el).innerHTML = `<img src="${src}" alt="Background">`;
+        UI.$('#sd-bg-label', el).innerHTML = `${ic('upload', 'sm')} Replace background`;
+        UI.$('#sd-bgrmv', el).classList.remove('hide');
+        UI.$('#sd-bg-note', el).textContent = 'Fills the whole sign, cropped to fit, behind everything else. The Background color below is unused.';
+        onDirty && onDirty();
+        redraw();
+      } catch (err) { console.error(err); UI.toast('Could not read that image', 'bad'); }
+    });
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('#sd-bgrmv')) {
+        th.background = null;
+        UI.$('#sd-bgpv', el).innerHTML = '<span class="muted small">No background image</span>';
+        UI.$('#sd-bg-label', el).innerHTML = `${ic('upload', 'sm')} Add background image`;
+        e.target.closest('#sd-bgrmv').classList.add('hide');
+        UI.$('#sd-bg-note', el).textContent = 'Fills the whole sign, cropped to fit, behind everything else.';
+        onDirty && onDirty();
+        redraw();
+      }
     });
     el.addEventListener('click', (e) => {
       if (e.target.closest('#sd-crop')) {
