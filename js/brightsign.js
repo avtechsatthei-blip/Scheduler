@@ -15,6 +15,25 @@
   const TEMPLATE = JSON.parse(TEMPLATE_JSON);
 
   BS.DEFAULT_FOLDER = '\\\\172.16.10.153\\AV_Techs\\Digital Signage Materials\\';
+  // Matches the dated subfolder pattern your own reference file was saved under: 2026\09 September\22\9.22\
+  BS.DEFAULT_DATE_FOLDER = '{YYYY}\\{MM} {Month}\\{DD}\\{M}.{DD}';
+
+  // Fills {YYYY} {MM} {M} {DD} {D} {Month} from a date (an event's date if you have one, else today) so
+  // each export can drop into a dated folder the way BrightAuthor found it in your working setup —
+  // this is very likely why a plain export "loses" the file: it wasn't saved in a dated subfolder at all.
+  BS.expandDateFolder = (template, dateISO) => {
+    template = String(template || '').trim();
+    if (!template) return '';
+    const d = dateISO ? U.parseDate(dateISO) : new Date();
+    const vals = { YYYY: d.getFullYear(), MM: String(d.getMonth() + 1).padStart(2, '0'), M: String(d.getMonth() + 1), DD: String(d.getDate()).padStart(2, '0'), D: String(d.getDate()), Month: U.MONL[d.getMonth()] };
+    return template.replace(/\{(YYYY|MM|M|DD|D|Month)\}/g, (_, k) => vals[k]);
+  };
+  // The full folder an export will use: the base folder from Settings, plus the expanded dated
+  // subfolder (if a template is set), always ending in exactly one backslash.
+  BS.resolveFolder = (baseFolder, dateFolderTemplate, dateISO) => {
+    const dated = BS.expandDateFolder(dateFolderTemplate, dateISO);
+    return BS.normFolder(BS.normFolder(baseFolder) + dated);
+  };
 
   // Match the ID shape BrightAuthor itself generates (8-4-4-4-12, a fixed "4000" group, "a" + 3 hex,
   // and a "000"-padded tail) so a generated file looks exactly like one it made itself.

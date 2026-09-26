@@ -451,3 +451,13 @@ kbd { background: #fff; border: 1px solid var(--line); border-bottom-width: 2px;
 /* ---------------- advanced sign composer ---------------- */
 .preview .ph { aspect-ratio: 16/9; background: #f4f1eb; border-radius: 6px; }
 .preview canvas { border-radius: 6px; }
+
+/* ---------------- logo crop ---------------- */
+.cropwrap { position: relative; display: inline-block; max-width: 100%; touch-action: none; line-height: 0; background: repeating-conic-gradient(#e7e2d8 0% 25%, #f4f1eb 0% 50%) 50% / 16px 16px; border-radius: 10px; overflow: hidden; }
+.cropwrap img { display: block; max-width: 640px; max-height: 460px; width: auto; height: auto; user-select: none; -webkit-user-drag: none; }
+.crop-box { position: absolute; border: 2px solid var(--orange); box-shadow: 0 0 0 9999px rgba(16, 41, 75, 0.45); cursor: move; touch-action: none; }
+.crop-h { position: absolute; width: 14px; height: 14px; background: #fff; border: 2px solid var(--orange); border-radius: 4px; touch-action: none; }
+.crop-h[data-corner="tl"] { left: -8px; top: -8px; cursor: nwse-resize; }
+.crop-h[data-corner="tr"] { right: -8px; top: -8px; cursor: nesw-resize; }
+.crop-h[data-corner="bl"] { left: -8px; bottom: -8px; cursor: nesw-resize; }
+.crop-h[data-corner="br"] { right: -8px; bottom: -8px; cursor: nwse-resize; }

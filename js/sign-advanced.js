@@ -90,7 +90,9 @@
           try {
             const b = results[+bsone.dataset.bsone];
             await IH.Imp.loadScript(JSZIP_URL);
-            const built = await IH.BrightSign.build(b.canvas, b.base, Store.state.settings.brightsignFolder);
+            const st = Store.state.settings;
+            const folder = IH.BrightSign.resolveFolder(st.brightsignFolder, st.brightsignDateFolder, ctx.event.date);
+            const built = await IH.BrightSign.build(b.canvas, b.base, folder);
             U.download(await IH.BrightSign.exportZip(built), `${b.base}_brightsign.zip`);
           } catch (err) { console.error(err); UI.toast('Could not build the BrightSign file: ' + err.message, 'bad'); }
           btn.disabled = false;
@@ -126,8 +128,10 @@
       await IH.Imp.loadScript(JSZIP_URL);
       const zip = new root.JSZip();
       if (bright) {
+        const st = Store.state.settings;
+        const folder = IH.BrightSign.resolveFolder(st.brightsignFolder, st.brightsignDateFolder, ctx.event.date);
         for (const b of built) {
-          const bs = await IH.BrightSign.build(b.canvas, b.base, Store.state.settings.brightsignFolder);
+          const bs = await IH.BrightSign.build(b.canvas, b.base, folder);
           zip.file(bs.filename, bs.json);
           zip.file(bs.pngFilename, bs.pngBlob);
         }

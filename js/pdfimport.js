@@ -14,6 +14,41 @@
     pdfjs: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
     pdfjsWorker: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
     tesseract: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
+    jszip: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+  };
+
+  // Does a folder name look like an old/superseded set of plans that should be skipped?
+  // Matches "old plans", "Old_Plans_v2", "archive", "superseded", etc. — a whole word, not a
+  // substring (so "Goldstein Room" is untouched even though it contains "old").
+  const SKIP_WORDS = ['old', 'outdated', 'obsolete', 'deprecated', 'superseded', 'archive', 'archived'];
+  Imp.looksArchived = (name) => {
+    const n = ' ' + String(name || '').toLowerCase().replace(/[_\-.]+/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+    return SKIP_WORDS.some((w) => n.includes(' ' + w + ' ') || n.includes(' ' + w + 's '));
+  };
+
+  // Walk a .zip (any folder depth) and pull out every PDF, skipping whole branches whose folder
+  // name looks like an old/archived set of plans (see looksArchived). Returns File objects (so
+  // they drop straight into readPdf/the existing import flow) plus the folder names that were
+  // skipped, for a one-line "here's what I left out" summary.
+  Imp.extractZipPdfs = async (zipFile) => {
+    await Imp.loadScript(CDN.jszip);
+    const zip = await window.JSZip.loadAsync(await zipFile.arrayBuffer());
+    const skippedFolders = new Set();
+    const entries = [];
+    zip.forEach((relPath, entry) => {
+      if (entry.dir) return;
+      if (!/\.pdf$/i.test(entry.name)) return;
+      const parts = relPath.split('/').filter(Boolean);
+      const badFolder = parts.slice(0, -1).find((seg) => Imp.looksArchived(seg));
+      if (badFolder) { skippedFolders.add(badFolder); return; }
+      entries.push(entry);
+    });
+    const files = [];
+    for (const entry of entries) {
+      const blob = await entry.async('blob');
+      files.push(new File([blob], entry.name.split('/').pop(), { type: 'application/pdf' }));
+    }
+    return { files, skippedFolders: [...skippedFolders] };
   };
 
   /* =====================================================================

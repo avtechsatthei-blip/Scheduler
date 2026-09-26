@@ -272,7 +272,9 @@
   };
 
   Sign.toBlob = (canvas) => new Promise((res) => canvas.toBlob(res, 'image/png'));
-  Sign.filename = (spec) => `${U.slug(spec.room)}__${U.slug(spec.name)}${spec.date ? '__' + spec.date : ''}.png`;
+  // Military time with no colon (e.g. "16:50" -> "1650"), for filenames — sorts and scans cleanly.
+  const military = (t) => (t ? String(t).replace(':', '') : '');
+  Sign.filename = (spec) => `${U.slug(spec.room)}__${U.slug(spec.name)}${spec.date ? '__' + spec.date : ''}${spec.end ? '__' + military(spec.end) : ''}.png`;
 
   Sign.specFor = (state, ev) => {
     const room = state.rooms.find((r) => r.id === ev.roomId);

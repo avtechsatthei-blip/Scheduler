@@ -23,6 +23,7 @@
     defaultEnd: '17:00',
     signTheme: 'classic', // classic | brand
     brightsignFolder: '', // '' = IH.BrightSign.DEFAULT_FOLDER
+    brightsignDateFolder: '{YYYY}\\{MM} {Month}\\{DD}\\{M}.{DD}', // dated subfolder appended after the base folder; blank = none
     signShowDate: false,
   };
 

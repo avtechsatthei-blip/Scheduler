@@ -255,12 +255,12 @@
   UI.Acts['import-open'] = () => openImport();
   function openImport(preloadPages) {
     const st = Store.state;
-    let drafts = [], warnings = [];
+    let drafts = [], warnings = [], zipSkipped = [];
     const m = UI.modal({
       title: 'Import events from a PDF', wide: true, dismiss: false,
       body: `<div id="imp-step1">
-          <label class="drop" id="drop"><input type="file" id="imp-file" accept="application/pdf" multiple>${ic('upload', 'lg')}<b>Drop an event-sheet PDF here, or click to choose</b>
-            <span class="muted small">Floor plans and Notes pages are both read. Nothing leaves your computer except the reader libraries downloading once.</span></label>
+          <label class="drop" id="drop"><input type="file" id="imp-file" accept="application/pdf,.zip" multiple>${ic('upload', 'lg')}<b>Drop event-sheet PDFs or a .zip of them here, or click to choose</b>
+            <span class="muted small">Floor plans and Notes pages are both read. A .zip is unpacked automatically — any folder named like "old plans", "archive" or "superseded" is skipped. Nothing leaves your computer except the reader libraries downloading once.</span></label>
           <div class="row" style="margin-top:14px"><label class="check"><input type="checkbox" id="imp-ocr" checked> Also read the floor-plan pages (finds start/end times and in-room tech counts)</label></div>
           <div class="small muted" style="margin-top:4px">Reading floor plans takes about a second a page once the text reader has downloaded (a one-time wait, and it needs an internet connection). Turn it off to import from the Notes pages only.</div>
           <div id="imp-prog" class="hide" style="margin-top:18px"><div class="progress"><i></i></div><div class="small muted" style="margin-top:6px" id="imp-msg"></div></div></div>
@@ -268,17 +268,46 @@
       actions: [{ label: 'Close' }, { label: 'Add selected events', cls: 'primary hide', icon: 'check', run: (mm) => commit(mm) }],
       onMount: (mm) => {
         const fi = UI.$('#imp-file', mm.el), drop = UI.$('#drop', mm.el);
-        fi.onchange = () => run([...fi.files]);
+        fi.onchange = () => handleFiles([...fi.files]);
         ['dragover', 'dragenter'].forEach((n) => drop.addEventListener(n, (e) => { e.preventDefault(); drop.classList.add('over'); }));
         ['dragleave', 'drop'].forEach((n) => drop.addEventListener(n, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
-        drop.addEventListener('drop', (e) => { const fs = [...e.dataTransfer.files].filter((f) => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name)); if (fs.length) run(fs); });
+        drop.addEventListener('drop', (e) => { const fs = [...e.dataTransfer.files].filter((f) => /\.(pdf|zip)$/i.test(f.name) || /pdf$/i.test(f.type)); if (fs.length) handleFiles(fs); });
         mm.el.addEventListener('input', onEdit); mm.el.addEventListener('change', onEdit);
         if (preloadPages) review(preloadPages);
       },
     });
     const addBtn = () => UI.$$('.df .btn', m.el).find((b) => b.classList.contains('primary'));
 
+    async function handleFiles(files) {
+      const zips = files.filter((f) => /\.zip$/i.test(f.name));
+      const pdfs = files.filter((f) => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
+      if (!zips.length) { run(pdfs); return; }
+      UI.$('#imp-prog', m.el).classList.remove('hide');
+      const msg = UI.$('#imp-msg', m.el), bar = UI.$('.progress i', m.el);
+      msg.textContent = zips.length > 1 ? `Reading ${zips.length} zip files…` : `Reading ${zips[0].name}…`;
+      bar.style.width = '4%';
+      let allPdfs = pdfs.slice(), skipped = [];
+      try {
+        for (const z of zips) {
+          const { files: extracted, skippedFolders } = await IH.Imp.extractZipPdfs(z);
+          allPdfs = allPdfs.concat(extracted);
+          skipped = skipped.concat(skippedFolders);
+        }
+      } catch (e) {
+        console.error(e);
+        msg.innerHTML = `<span style="color:var(--bad)">${esc(e.message || 'Could not read that zip file.')}</span>`;
+        return;
+      }
+      zipSkipped = [...new Set(skipped)];
+      if (!allPdfs.length) {
+        msg.innerHTML = `<span style="color:var(--bad)">No PDFs found in that zip${zipSkipped.length ? ' (skipped folder' + (zipSkipped.length === 1 ? '' : 's') + ': ' + zipSkipped.map(esc).join(', ') + ')' : ''}.</span>`;
+        return;
+      }
+      run(allPdfs);
+    }
+
     async function run(files) {
+      if (!files.length) return;
       const ocr = UI.$('#imp-ocr', m.el).checked;
       UI.$('#imp-prog', m.el).classList.remove('hide');
       const bar = UI.$('.progress i', m.el), msg = UI.$('#imp-msg', m.el);
@@ -315,13 +344,13 @@
     function draw() {
       const s2 = UI.$('#imp-step2', m.el);
       if (!drafts.length) {
-        s2.innerHTML = `<div class="empty"><h3>Nothing found</h3><p>I couldn't find any room and date footers in that file.${warnings.length ? '<br>' + warnings.map(esc).join('<br>') : ''}</p><button class="btn" data-act="import-again">Try another file</button></div>`;
+        s2.innerHTML = `<div class="empty"><h3>Nothing found</h3><p>I couldn't find any room and date footers in that file.${warnings.length ? '<br>' + warnings.map(esc).join('<br>') : ''}${zipSkipped.length ? `<br>Skipped folder${zipSkipped.length === 1 ? '' : 's'} that looked like old plans: ${zipSkipped.map(esc).join(', ')}.` : ''}</p><button class="btn" data-act="import-again">Try another file</button></div>`;
         addBtn().classList.add('hide');
         return;
       }
       const roomOpts = (d) => Store.state.rooms.map((r) => UI.opt(r.id, r.name, d.roomSel === r.id)).join('') + UI.opt('__new', `＋ New room: ${d.roomName}`, d.roomSel === '__new');
       const n = drafts.filter((d) => d.include).length;
-      s2.innerHTML = `<div class="callout info" style="margin-bottom:14px">${ic('info')}<div>Found <b>${UI.plural(drafts.length, 'event')}</b>. Times marked <i>from floor plan</i> or <i>agenda</i> were read off the drawings, so give them a quick look. Fix anything here, then add them.${warnings.length ? '<br>' + warnings.map(esc).join('<br>') : ''}</div></div>
+      s2.innerHTML = `<div class="callout info" style="margin-bottom:14px">${ic('info')}<div>Found <b>${UI.plural(drafts.length, 'event')}</b>. Times marked <i>from floor plan</i> or <i>agenda</i> were read off the drawings, so give them a quick look. Fix anything here, then add them.${warnings.length ? '<br>' + warnings.map(esc).join('<br>') : ''}${zipSkipped.length ? `<br>Skipped folder${zipSkipped.length === 1 ? '' : 's'} that looked like old plans: ${zipSkipped.map(esc).join(', ')}.` : ''}</div></div>
         <div class="scroll-x card"><table class="tbl tight" style="min-width:900px"><thead><tr><th></th><th>Date</th><th>Room</th><th>Event</th><th>Start</th><th>End</th><th>Tech</th><th>AV items</th></tr></thead><tbody>
         ${drafts.map((d) => `<tr data-i="${d._i}"><td><input type="checkbox" data-f="include" ${d.include ? 'checked' : ''}></td>
           <td><input class="in sm" type="date" data-f="date" value="${d.date}" style="min-width:132px"></td>
@@ -339,7 +368,7 @@
       b.lastChild.textContent = ` Add ${n} event${n === 1 ? '' : 's'}`;
       b.disabled = !n;
     }
-    UI.Acts['import-again'] = () => { UI.$('#imp-step1', m.el).classList.remove('hide'); UI.$('#imp-step2', m.el).classList.add('hide'); addBtn().classList.add('hide'); UI.$('#imp-prog', m.el).classList.add('hide'); };
+    UI.Acts['import-again'] = () => { zipSkipped = []; UI.$('#imp-step1', m.el).classList.remove('hide'); UI.$('#imp-step2', m.el).classList.add('hide'); addBtn().classList.add('hide'); UI.$('#imp-prog', m.el).classList.add('hide'); };
 
     function onEdit(e) {
       const t = e.target, tr = t.closest('tr[data-i]');

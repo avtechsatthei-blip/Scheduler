@@ -26,7 +26,7 @@
         <div class="logopv" id="sd-logopv">${hasLogo ? `<img src="${th.logo.src}" alt="Logo">` : `<span class="muted small">No logo yet</span>`}</div>
         <div class="col" style="gap:8px">
           <label class="btn sm">${ic('upload', 'sm')} ${hasLogo ? 'Replace logo' : 'Upload logo'}<input type="file" accept="image/*" id="sd-logofile" hidden></label>
-          ${hasLogo ? `<button class="btn ghost sm" type="button" id="sd-logormv">${ic('x', 'sm')} Remove logo</button>` : ''}
+          ${hasLogo ? `<button class="btn ghost sm" type="button" id="sd-crop">${ic('crop', 'sm')} Crop</button><button class="btn ghost sm" type="button" id="sd-logormv">${ic('x', 'sm')} Remove logo</button>` : ''}
           <button class="btn sm" type="button" id="sd-match" ${hasLogo ? '' : 'disabled'} title="${hasLogo ? '' : 'Upload a logo first'}">${ic('wand', 'sm')} Match colors to logo</button>
           <div class="swatches sm" id="sd-swatches"></div>
           <div class="row wrap" style="gap:10px">
@@ -91,7 +91,7 @@
         const hadLogo = !!th.logo;
         const src = await U.fileToDataURL(f);
         const img = await U.loadImage(src);
-        th.logo = { src, h: hadLogo ? th.logo.h : 132, y: hadLogo ? th.logo.y : 62 }; // keep size/position when just swapping the image
+        th.logo = { src, origSrc: src, h: hadLogo ? th.logo.h : 132, y: hadLogo ? th.logo.y : 62 }; // keep size/position when just swapping the image; a fresh upload always starts uncropped
         Store.layoutForLogo(th, hadLogo);
         Sign._logoCache[src] = img;
         const palette = Sign.extractPalette(img);
@@ -100,7 +100,7 @@
         const matchBtn = UI.$('#sd-match', el);
         matchBtn.disabled = false;
         matchBtn.title = '';
-        if (!UI.$('#sd-logormv', el)) matchBtn.insertAdjacentHTML('beforebegin', `<button class="btn ghost sm" type="button" id="sd-logormv">${ic('x', 'sm')} Remove logo</button>`);
+        if (!UI.$('#sd-logormv', el)) matchBtn.insertAdjacentHTML('beforebegin', `<button class="btn ghost sm" type="button" id="sd-crop">${ic('crop', 'sm')} Crop</button><button class="btn ghost sm" type="button" id="sd-logormv">${ic('x', 'sm')} Remove logo</button>`);
         const hInput = UI.$('#sd-logo-h', el), yInput = UI.$('#sd-logo-y', el), tyInput = UI.$('#sd-text-y', el);
         if (hInput) { hInput.disabled = false; hInput.value = th.logo.h; }
         if (yInput) { yInput.disabled = false; yInput.value = th.logo.y; }
@@ -110,6 +110,9 @@
       } catch (err) { console.error(err); UI.toast('Could not read that image', 'bad'); }
     });
     el.addEventListener('click', (e) => {
+      if (e.target.closest('#sd-crop')) {
+        openCropModal(th, () => { UI.$('#sd-logopv', el).innerHTML = `<img src="${th.logo.src}" alt="Logo">`; onDirty && onDirty(); redraw(); });
+      }
       if (e.target.closest('#sd-logormv')) {
         th.logo = null;
         Store.layoutForLogo(th, true);
@@ -140,6 +143,81 @@
     });
     redraw();
     return { redraw };
+  }
+
+  // A drag-to-move, drag-corner-to-resize crop tool over the logo's original upload (so cropping
+  // again later never re-compresses an already-cropped image). Calls onDone() after Apply, once
+  // th.logo.src/origSrc/cropRect are updated — the caller re-renders the sign preview from there.
+  function openCropModal(th, onDone) {
+    const src = th.logo.origSrc || th.logo.src;
+    const prevRect = th.logo.cropRect;
+    const body = `<div class="cropwrap" id="crop-wrap"><img id="crop-img" src="${src}" alt="Logo" draggable="false">
+        <div class="crop-box" id="crop-box"><span class="crop-h" data-corner="tl"></span><span class="crop-h" data-corner="tr"></span><span class="crop-h" data-corner="bl"></span><span class="crop-h" data-corner="br"></span></div></div>
+      <p class="small muted" style="margin-top:12px">Drag inside the box to move it, drag a corner to resize. This always starts from your original upload, so cropping again later doesn't lose quality.</p>`;
+    let m, natW = 0, natH = 0, scale = 1, box = { x: 0, y: 0, w: 0, h: 0 };
+    m = UI.modal({
+      title: 'Crop logo', wide: true, body,
+      actions: [{ label: 'Cancel' }, { label: 'Use full image', run: () => apply(0, 0, natW, natH) }, { label: 'Apply crop', cls: 'primary', icon: 'check', run: () => apply(box.x / scale, box.y / scale, box.w / scale, box.h / scale) }],
+      onMount: () => setup(),
+    });
+    function setup() {
+      const img = UI.$('#crop-img', m.el);
+      const start = () => {
+        natW = img.naturalWidth; natH = img.naturalHeight;
+        const dispW = img.clientWidth, dispH = img.clientHeight;
+        scale = dispW / natW;
+        box = prevRect ? { x: prevRect.x * scale, y: prevRect.y * scale, w: prevRect.w * scale, h: prevRect.h * scale } : { x: 0, y: 0, w: dispW, h: dispH };
+        clamp(); paint(); wireDrag();
+      };
+      if (img.complete && img.naturalWidth) start(); else img.onload = start;
+    }
+    function paint() {
+      const el = UI.$('#crop-box', m.el);
+      if (el) { el.style.left = box.x + 'px'; el.style.top = box.y + 'px'; el.style.width = box.w + 'px'; el.style.height = box.h + 'px'; }
+    }
+    function clamp() {
+      const img = UI.$('#crop-img', m.el);
+      const dispW = img.clientWidth, dispH = img.clientHeight;
+      box.w = Math.max(20, Math.min(box.w, dispW));
+      box.h = Math.max(20, Math.min(box.h, dispH));
+      box.x = Math.max(0, Math.min(box.x, dispW - box.w));
+      box.y = Math.max(0, Math.min(box.y, dispH - box.h));
+    }
+    function wireDrag() {
+      const wrap = UI.$('#crop-wrap', m.el), boxEl = UI.$('#crop-box', m.el);
+      let mode = null, corner = null, startX = 0, startY = 0, startBox = null;
+      boxEl.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        mode = e.target.dataset.corner ? 'resize' : 'move';
+        corner = e.target.dataset.corner || null;
+        startX = e.clientX; startY = e.clientY; startBox = Object.assign({}, box);
+        if (wrap.setPointerCapture) wrap.setPointerCapture(e.pointerId);
+      });
+      wrap.addEventListener('pointermove', (e) => {
+        if (!mode) return;
+        const dx = e.clientX - startX, dy = e.clientY - startY;
+        if (mode === 'move') { box.x = startBox.x + dx; box.y = startBox.y + dy; }
+        else {
+          if (corner.includes('r')) box.w = startBox.w + dx; else { box.x = startBox.x + dx; box.w = startBox.w - dx; }
+          if (corner.includes('b')) box.h = startBox.h + dy; else { box.y = startBox.y + dy; box.h = startBox.h - dy; }
+        }
+        clamp(); paint();
+      });
+      const end = () => { mode = null; };
+      wrap.addEventListener('pointerup', end);
+      wrap.addEventListener('pointercancel', end);
+    }
+    function apply(nx, ny, nw, nh) {
+      nx = Math.round(nx); ny = Math.round(ny); nw = Math.round(Math.max(1, nw)); nh = Math.round(Math.max(1, nh));
+      const canvas = document.createElement('canvas');
+      canvas.width = nw; canvas.height = nh;
+      canvas.getContext('2d').drawImage(UI.$('#crop-img', m.el), nx, ny, nw, nh, 0, 0, nw, nh);
+      th.logo.origSrc = th.logo.origSrc || src;
+      th.logo.src = canvas.toDataURL('image/png');
+      th.logo.cropRect = { x: nx, y: ny, w: nw, h: nh };
+      delete Sign._logoCache[th.logo.src]; // force a fresh decode of the freshly-cropped image
+      onDone();
+    }
   }
   // Exposed so other screens (the Advanced time-slot composer) can build a custom design inline
   // without duplicating this logic.

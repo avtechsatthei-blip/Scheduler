@@ -38,7 +38,9 @@
           <div class="span-3 keep-half">${UI.field('New event ends', `<input class="in" type="time" value="${s.defaultEnd}" data-change="set" data-key="defaultEnd" data-kind="str">`)}</div>
           <div class="span-4">${UI.field('Room sign style', `<div class="row" style="gap:8px"><select class="in" data-change="set" data-key="signTheme" data-kind="str" style="flex:1">${IH.Sign.allThemes(Store.state).map((t) => UI.opt(t.key, t.label, s.signTheme === t.key)).join('')}</select><button type="button" class="btn ghost icon" data-act="sign-designs" title="Manage sign designs">${ic('sliders', 'sm')}</button></div>`, 'Custom designs (a logo with matching colors) are made from Room signs, or the button here')}</div>
           <div class="span-2" style="align-self:end"><label class="check"><input type="checkbox" ${s.signShowDate ? 'checked' : ''} data-change="set" data-key="signShowDate" data-kind="bool"> Date on signs</label></div>
-          <div class="span-6">${UI.field('BrightSign asset folder', `<input class="in" autocomplete="off" value="${esc(s.brightsignFolder)}" placeholder="${esc(IH.BrightSign.DEFAULT_FOLDER)}" data-change="set" data-key="brightsignFolder" data-kind="str">`, 'Where you keep signage images on your network. Used when a room sign is exported for BrightSign.')}</div></div></div>
+          <div class="span-6">${UI.field('BrightSign asset folder', `<input class="in" autocomplete="off" value="${esc(s.brightsignFolder)}" placeholder="${esc(IH.BrightSign.DEFAULT_FOLDER)}" data-change="set" data-key="brightsignFolder" data-kind="str">`, 'Where you keep signage images on your network. Used when a room sign is exported for BrightSign.')}</div>
+          <div class="span-6">${UI.field('Dated subfolder', `<input class="in" autocomplete="off" id="bs-datefolder" value="${esc(s.brightsignDateFolder)}" placeholder="e.g. ${esc(IH.BrightSign.DEFAULT_DATE_FOLDER)}" data-change="set" data-key="brightsignDateFolder" data-kind="str">`, 'Appended after the folder above. {YYYY} {MM} {M} {DD} {D} {Month} fill in from the event date on the sign. Leave blank for none.')}</div>
+          <div class="span-12" id="bs-preview" style="margin-top:-6px"><span class="tiny muted">Example for today: <code>${esc(IH.BrightSign.resolveFolder(s.brightsignFolder, s.brightsignDateFolder))}</code></span></div></div></div>
         ${IH.Cloud.cardHtml()}
         <div class="card pad"><h3>Your data</h3>
           <p class="muted small" style="margin:6px 0 12px">${IH.Cloud.status === 'off' || IH.Cloud.status === 'signed-out' ? 'Everything is saved in this browser only. Clearing site data or switching computers loses it, so turn on cloud sync above or download a backup now and then.' : 'Your data is saved in this browser and synced to the cloud. A backup file is still a good safety net.'} ${last ? `Last backup: ${esc(new Date(last).toLocaleString())}.` : '<b>You haven\'t made a backup yet.</b>'}</p>
@@ -47,6 +49,12 @@
             <button class="btn" data-act="load-sample-now">${ic('sparkle', 'sm')} Load sample week</button>
             <button class="btn danger" data-act="reset-all">${ic('trash', 'sm')} Erase everything</button></div></div>
       </div>`;
+    },
+    mount() {
+      const upd = () => { const box = UI.$('#bs-preview'); if (box) box.innerHTML = `<span class="tiny muted">Example for today: <code>${esc(IH.BrightSign.resolveFolder(UI.$('input[data-key=brightsignFolder]').value, UI.$('#bs-datefolder').value))}</code></span>`; };
+      const f1 = UI.$('input[data-key=brightsignFolder]'), f2 = UI.$('#bs-datefolder');
+      if (f1) f1.addEventListener('input', upd);
+      if (f2) f2.addEventListener('input', upd);
     },
   };
 

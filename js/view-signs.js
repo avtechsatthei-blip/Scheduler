@@ -166,9 +166,11 @@
       await IH.Imp.loadScript(JSZIP_URL);
       const canvas = await makeCanvas(ent);
       const base = fname(ent).replace(/\.png$/i, '');
-      const built = await IH.BrightSign.build(canvas, base, Store.state.settings.brightsignFolder);
+      const st = Store.state.settings;
+      const folder = IH.BrightSign.resolveFolder(st.brightsignFolder, st.brightsignDateFolder, ent.dates[0]);
+      const built = await IH.BrightSign.build(canvas, base, folder);
       U.download(await IH.BrightSign.exportZip(built), `${base}_brightsign.zip`);
-      UI.toast('BrightSign file downloaded. Unzip both files into your signage folder.', 'ok');
+      UI.toast(`BrightSign file downloaded for ${folder}. Unzip both files there.`, 'ok');
     } catch (e) { console.error(e); UI.toast('Could not build the BrightSign file: ' + e.message, 'bad'); }
     el.disabled = false;
   };
@@ -201,12 +203,13 @@
       await IH.Imp.loadScript(JSZIP_URL);
       const zip = new root.JSZip();
       const used = new Set();
-      const folder = Store.state.settings.brightsignFolder;
+      const st = Store.state.settings;
       for (const ent of chosen) {
         const canvas = await makeCanvas(ent);
         let base = fname(ent).replace(/\.png$/i, '');
         if (used.has(base)) base += '_' + used.size;
         used.add(base);
+        const folder = IH.BrightSign.resolveFolder(st.brightsignFolder, st.brightsignDateFolder, ent.dates[0]);
         const built = await IH.BrightSign.build(canvas, base, folder);
         zip.file(built.filename, built.json);
         zip.file(built.pngFilename, built.pngBlob);
