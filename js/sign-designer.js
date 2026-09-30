@@ -22,7 +22,20 @@
   function fieldsHtml(th) {
     const hasLogo = !!th.logo;
     const hasBg = !!th.background;
+    const hasFull = !!th.fullImage;
     return `<div class="sdes">
+      <label class="check" style="margin-bottom:14px"><span class="switch"><input type="checkbox" id="sd-full-toggle" ${hasFull ? 'checked' : ''}><i></i></span> Use your own image for the whole sign</label>
+      <div id="sd-full-section" class="${hasFull ? '' : 'hide'}">
+        <div class="row wrap" style="gap:14px;align-items:flex-start">
+          <div class="logopv" id="sd-full-pv" style="width:230px;height:130px">${hasFull ? `<img src="${th.fullImage.src}" alt="Custom sign">` : `<span class="muted small">No image yet</span>`}</div>
+          <div class="col" style="gap:8px">
+            <label class="btn sm"><span id="sd-full-label">${ic('upload', 'sm')} ${hasFull ? 'Replace image' : 'Upload image'}</span><input type="file" accept="image/*" id="sd-full-file" hidden></label>
+            <button class="btn ghost sm ${hasFull ? '' : 'hide'}" type="button" id="sd-full-rmv">${ic('x', 'sm')} Remove image</button>
+          </div>
+        </div>
+        <p class="small muted" style="margin-top:10px;max-width:480px">Used exactly as sent, filling the whole sign — none of the colors, logo, text or room bar below apply. Works best at 1920 × 1080 (or the same shape); anything else is cropped to fit, never stretched or squashed.</p>
+      </div>
+      <div id="sd-composed-section" class="${hasFull ? 'hide' : ''}">
       <div class="sdes-logo">
         <div class="logopv" id="sd-logopv">${hasLogo ? `<img src="${th.logo.src}" alt="Logo">` : `<span class="muted small">No logo yet</span>`}</div>
         <div class="col" style="gap:8px">
@@ -48,12 +61,19 @@
         ${UI.field('Text size', `<input class="in sm num" type="number" min="24" max="220" step="2" id="sd-text-size" value="${th.titleSize || 144}" style="max-width:84px">`, 'Largest it will print, px')}
         ${UI.field('Text position', `<input class="in sm num" type="number" min="80" max="850" step="2" id="sd-text-y" value="${th.titleCy != null ? th.titleCy : 488}" style="max-width:84px">`, 'Vertical center, px from the top')}
       </div>
+      <label class="check" style="margin-top:12px"><span class="switch"><input type="checkbox" id="sd-bar-show" ${th.showBar !== false ? 'checked' : ''}><i></i></span> Show the room bar</label>
+      <div class="row wrap" style="gap:10px;margin-top:10px" id="sd-bar-fields">
+        ${UI.field('Bar size', `<input class="in sm num" type="number" min="30" max="400" step="2" id="sd-bar-h" value="${th.barH != null ? th.barH : 154}" ${th.showBar === false ? 'disabled' : ''} style="max-width:84px">`, 'Height, px')}
+        ${UI.field('Room text size', `<input class="in sm num" type="number" min="24" max="200" step="2" id="sd-room-size" value="${th.roomTextSize || 132}" ${th.showBar === false ? 'disabled' : ''} style="max-width:84px">`, 'Largest it will print, px')}
+      </div>
+      </div>
       <div class="preview sdpv" id="sd-preview" style="margin-top:14px;max-width:420px">
         <div id="sd-canvas-host"></div>
         <div class="sdpv-logo hide" id="sd-logo-handle" title="Drag to move"><span class="sdpv-rz" title="Drag to resize"></span></div>
-        <div class="sdpv-text" id="sd-text-handle" title="Drag to move the text"><span class="sdpv-grip">${ic('move', 'sm')}</span></div>
+        <div class="sdpv-text ${hasFull ? 'hide' : ''}" id="sd-text-handle" title="Drag to move the text"><span class="sdpv-grip">${ic('move', 'sm')}</span></div>
+        <div class="sdpv-bar ${(hasFull || th.showBar === false) ? 'hide' : ''}" id="sd-bar-handle" title="Drag to move the bar"><span class="sdpv-rz sdpv-rz-v" title="Drag to resize"></span></div>
       </div>
-      <div class="small muted" style="margin-top:6px">Drag the logo or the text on the preview to reposition; drag the logo's corner to resize (its shape always stays locked).</div>
+      <div class="small muted" style="margin-top:6px" id="sd-drag-hint">${hasFull ? '' : 'Drag the logo, text or room bar on the preview to reposition; drag a corner or edge to resize (the logo\'s shape always stays locked).'}</div>
     </div>`;
   }
 
@@ -72,6 +92,9 @@
       const host = UI.$('#sd-canvas-host', el);
       if (host) { host.innerHTML = ''; host.appendChild(canvas); }
       positionHandles(layout);
+      const hint = UI.$('#sd-drag-hint', el);
+      if (hint && !th.fullImage) hint.textContent = "Drag the logo, text or room bar on the preview to reposition; drag a corner or edge to resize (the logo's shape always stays locked).";
+      else if (hint) hint.textContent = '';
     }
     function curLogoW() {
       const img = th.logo && Sign._logoCache[th.logo.src];
@@ -93,9 +116,15 @@
       } else lh.classList.add('hide');
       const tx = UI.$('#sd-text-handle', el);
       if (layout.title) {
+        tx.classList.remove('hide');
         const h = Math.max(28, (layout.title.bottom - layout.title.top) * scale);
         tx.style.top = layout.title.top * scale + 'px'; tx.style.height = h + 'px';
-      }
+      } else tx.classList.add('hide');
+      const bh = UI.$('#sd-bar-handle', el);
+      if (layout.bar) {
+        bh.classList.remove('hide');
+        bh.style.top = layout.bar.y * scale + 'px'; bh.style.height = layout.bar.h * scale + 'px';
+      } else bh.classList.add('hide');
     }
     // A drag-to-move (and, for the logo, drag-corner-to-resize, aspect locked) handle on the live sign
     // preview. `onMove(dx, dy, resizing)` gets deltas already converted from screen px to sign px.
@@ -105,17 +134,19 @@
         e.preventDefault(); e.stopPropagation();
         const scale = scaleFactor();
         dragging = { x0: e.clientX, y0: e.clientY, scale, resizing: !!e.target.closest('.sdpv-rz') };
-        if (handleEl.setPointerCapture) handleEl.setPointerCapture(e.pointerId);
       });
-      handleEl.addEventListener('pointermove', (e) => {
+      // Listen on the document, not the (often small) handle itself: a fast drag can easily carry the
+      // pointer outside the handle's own bounds before the browser hands it pointer capture, which would
+      // silently stop the drag after just a few pixels. The document always sees every move.
+      document.addEventListener('pointermove', (e) => {
         if (!dragging) return;
         const dx = (e.clientX - dragging.x0) / dragging.scale, dy = (e.clientY - dragging.y0) / dragging.scale;
         onMove(dx, dy, dragging.resizing);
         dragging.x0 = e.clientX; dragging.y0 = e.clientY; // incremental, so a mid-drag h/w change doesn't jump
       });
       const end = () => { dragging = null; };
-      handleEl.addEventListener('pointerup', end);
-      handleEl.addEventListener('pointercancel', end);
+      document.addEventListener('pointerup', end);
+      document.addEventListener('pointercancel', end);
     }
     wireDrag(UI.$('#sd-logo-handle', el), (dx, dy, resizing) => {
       if (!th.logo) return;
@@ -132,6 +163,15 @@
     wireDrag(UI.$('#sd-text-handle', el), (dx, dy) => {
       th.titleCy = Math.max(0, Math.min(Sign.H, (th.titleCy != null ? th.titleCy : 488) + dy));
       const tyInput = UI.$('#sd-text-y', el); if (tyInput) tyInput.value = Math.round(th.titleCy);
+      onDirty && onDirty();
+      redraw();
+    });
+    wireDrag(UI.$('#sd-bar-handle', el), (dx, dy, resizing) => {
+      if (th.showBar === false) return;
+      const curY = th.barY != null ? th.barY : 886, curH = th.barH != null ? th.barH : 154;
+      if (resizing) th.barH = Math.max(30, curH + dy);
+      else th.barY = Math.max(0, Math.min(Sign.H - curH, curY + dy));
+      const hInput = UI.$('#sd-bar-h', el); if (hInput) hInput.value = Math.round(th.barH != null ? th.barH : curH);
       onDirty && onDirty();
       redraw();
     });
@@ -152,12 +192,64 @@
       if (t.id === 'sd-logo-y' && th.logo) { th.logo.y = Math.max(0, +t.value || 0); onDirty && onDirty(); redraw(); }
       if (t.id === 'sd-text-size') { th.titleSize = Math.max(10, +t.value || 144); onDirty && onDirty(); redraw(); }
       if (t.id === 'sd-text-y') { th.titleCy = Math.max(0, +t.value || 0); onDirty && onDirty(); redraw(); }
+      if (t.id === 'sd-bar-h') { th.barH = Math.max(10, +t.value || 154); onDirty && onDirty(); redraw(); }
+      if (t.id === 'sd-room-size') { th.roomTextSize = Math.max(10, +t.value || 132); onDirty && onDirty(); redraw(); }
     });
     el.addEventListener('click', (e) => {
       const sw = e.target.closest('[data-swatch]');
       if (sw) setColor('bar', sw.dataset.swatch);
     });
     UI.$('#sd-bold', el).addEventListener('change', (e) => { th.weight = e.target.checked ? 600 : 500; th.roomWeight = th.weight; onDirty && onDirty(); redraw(); });
+    UI.$('#sd-bar-show', el).addEventListener('change', (e) => {
+      th.showBar = e.target.checked;
+      const barH = UI.$('#sd-bar-h', el), roomSize = UI.$('#sd-room-size', el), barHandle = UI.$('#sd-bar-handle', el);
+      if (barH) barH.disabled = !e.target.checked;
+      if (roomSize) roomSize.disabled = !e.target.checked;
+      if (barHandle) barHandle.classList.toggle('hide', !e.target.checked);
+      onDirty && onDirty();
+      redraw();
+    });
+    UI.$('#sd-full-toggle', el).addEventListener('change', (e) => {
+      const composed = UI.$('#sd-composed-section', el), full = UI.$('#sd-full-section', el);
+      if (e.target.checked) {
+        // stays null until they actually upload one; the old composed design (and its drag handles)
+        // keeps showing until then — positionHandles() and redraw()'s hint text follow th.fullImage automatically
+        composed.classList.add('hide'); full.classList.remove('hide');
+      } else {
+        th.fullImage = null; // switching back to a composed design always clears it — nothing left "using" the old upload
+        UI.$('#sd-full-pv', el).innerHTML = '<span class="muted small">No image yet</span>';
+        UI.$('#sd-full-label', el).innerHTML = `${ic('upload', 'sm')} Upload image`;
+        UI.$('#sd-full-rmv', el).classList.add('hide');
+        composed.classList.remove('hide'); full.classList.add('hide');
+      }
+      onDirty && onDirty();
+      redraw();
+    });
+    UI.$('#sd-full-file', el).addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      if (!/^image\//.test(f.type)) { UI.toast('That file is not an image', 'bad'); return; }
+      try {
+        const src = await U.fileToDataURL(f);
+        Sign._logoCache[src] = await U.loadImage(src);
+        th.fullImage = { src };
+        UI.$('#sd-full-pv', el).innerHTML = `<img src="${src}" alt="Custom sign">`;
+        UI.$('#sd-full-label', el).innerHTML = `${ic('upload', 'sm')} Replace image`;
+        UI.$('#sd-full-rmv', el).classList.remove('hide');
+        onDirty && onDirty();
+        redraw();
+      } catch (err) { console.error(err); UI.toast('Could not read that image', 'bad'); }
+    });
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('#sd-full-rmv')) {
+        th.fullImage = null;
+        UI.$('#sd-full-pv', el).innerHTML = '<span class="muted small">No image yet</span>';
+        UI.$('#sd-full-label', el).innerHTML = `${ic('upload', 'sm')} Upload image`;
+        e.target.closest('#sd-full-rmv').classList.add('hide');
+        onDirty && onDirty();
+        redraw();
+      }
+    });
     UI.$('#sd-logofile', el).addEventListener('change', async (e) => {
       const f = e.target.files[0];
       if (!f) return;

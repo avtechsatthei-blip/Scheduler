@@ -48,6 +48,7 @@
     list.forEach((th) => {
       if (th && th.logo && th.logo.src) srcs.push(th.logo.src);
       if (th && th.background && th.background.src) srcs.push(th.background.src);
+      if (th && th.fullImage && th.fullImage.src) srcs.push(th.fullImage.src);
     });
     for (const src of srcs) {
       if (Sign._logoCache[src]) continue;
@@ -204,6 +205,19 @@
     ctx.fillStyle = th.bg;
     ctx.fillRect(0, 0, Sign.W, Sign.H);
 
+    // --- a whole ready-made sign someone sent in: use it exactly as uploaded, nothing else drawn
+    if (th.fullImage) {
+      const img = Sign._logoCache[th.fullImage.src];
+      if (img) {
+        const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+        const scale = Math.max(Sign.W / iw, Sign.H / ih); // cover-fit: fills the sign, crops any overhang, never stretches
+        const dw = iw * scale, dh = ih * scale;
+        ctx.drawImage(img, (Sign.W - dw) / 2, (Sign.H - dh) / 2, dw, dh);
+      }
+      if (opts.withLayout) return { canvas, layout: { logo: null, title: null, bar: null } };
+      return canvas;
+    }
+
     // --- optional background image, cropped to cover the whole sign, drawn under everything else
     const bgImg = th.background && Sign._logoCache[th.background.src];
     if (th.background && bgImg) {
@@ -252,28 +266,40 @@
       ctx.globalAlpha = 1;
     }
 
-    // --- room bar
-    ctx.fillStyle = th.bar;
-    ctx.fillRect(0, 886, Sign.W, 154);
-    ctx.strokeStyle = th.barLine;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 887, Sign.W - 2, 152);
-    ctx.fillStyle = th.strip;
-    ctx.fillRect(0, 1040, Sign.W, 40);
-    ctx.strokeStyle = th.stripLine;
-    ctx.strokeRect(1, 1041, Sign.W - 2, 38);
+    // --- room bar: optional (can be moved, resized, or turned off entirely)
+    const barY = th.barY != null ? th.barY : 886;
+    const barH = th.barH != null ? th.barH : 154;
+    const stripH = th.stripH != null ? th.stripH : 40;
+    const showBar = th.showBar !== false; // absent (older saved themes) defaults to shown, same as before
+    let barBox = null;
+    if (showBar) {
+      ctx.fillStyle = th.bar;
+      ctx.fillRect(0, barY, Sign.W, barH);
+      ctx.strokeStyle = th.barLine;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, barY + 1, Sign.W - 2, Math.max(0, barH - 2));
+      if (stripH > 0) {
+        ctx.fillStyle = th.strip;
+        ctx.fillRect(0, barY + barH, Sign.W, stripH);
+        ctx.strokeStyle = th.stripLine;
+        ctx.strokeRect(1, barY + barH + 1, Sign.W - 2, Math.max(0, stripH - 2));
+      }
 
-    let rs = 132;
-    ctx.textAlign = 'left';
-    ctx.fillStyle = th.roomText;
-    for (; rs > 48; rs -= 4) {
-      ctx.font = `${th.roomWeight || 500} ${rs}px ${Sign.FONT}`;
-      if (ctx.measureText(spec.room || '').width <= Sign.W - 40) break;
+      const roomMax = th.roomTextSize || 132;
+      const roomFloor = Math.min(48, roomMax);
+      let rs = roomMax;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = th.roomText;
+      for (; rs > roomFloor; rs -= 4) {
+        ctx.font = `${th.roomWeight || 500} ${rs}px ${Sign.FONT}`;
+        if (ctx.measureText(spec.room || '').width <= Sign.W - 40) break;
+      }
+      if (th.shadow) { ctx.shadowColor = th.shadow; ctx.shadowBlur = 6; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4; }
+      ctx.fillText(spec.room || '', 12, barY + barH * 0.766 - (roomMax - rs) * 0.1);
+      ctx.shadowColor = 'transparent';
+      barBox = { y: barY, h: barH };
     }
-    if (th.shadow) { ctx.shadowColor = th.shadow; ctx.shadowBlur = 6; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4; }
-    ctx.fillText(spec.room || '', 12, 1004 - (132 - rs) * 0.1);
-    ctx.shadowColor = 'transparent';
-    if (opts.withLayout) return { canvas, layout: { logo: logoBox, title: { cy, top, bottom: top + lines.length * pitch, size } } };
+    if (opts.withLayout) return { canvas, layout: { logo: logoBox, title: { cy, top, bottom: top + lines.length * pitch, size }, bar: barBox } };
     return canvas;
   };
 

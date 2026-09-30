@@ -303,7 +303,7 @@ label.f .hint { font-weight: 500; color: var(--muted); letter-spacing: 0; font-s
 #modal-root .dlg.narrow { max-width: 460px; }
 .dlg .dh { display: flex; align-items: center; gap: 12px; padding: 18px 24px 14px; border-bottom: 1px solid var(--line); }
 .dlg .dh h2 { font-family: var(--serif); font-weight: 400; font-size: 24px; color: var(--navy); }
-.dlg .db { padding: 20px 24px; overflow-y: auto; }
+.dlg .db { padding: 20px 24px; overflow-y: auto; min-height: 0; }
 .dlg .df { display: flex; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--line); background: #fff; border-radius: 0 0 18px 18px; align-items: center; }
 .dlg .df .l { margin-right: auto; }
 @keyframes fade { from { opacity: 0; } }
@@ -482,3 +482,8 @@ kbd { background: #fff; border: 1px solid var(--line); border-bottom-width: 2px;
 .design-meta { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
 .design-new { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 168px; border: 1.5px dashed var(--line); background: #fbfaf7; color: var(--navy); cursor: pointer; font-weight: 700; }
 .design-new:hover { border-color: var(--orange); color: var(--orange-d); }
+
+/* ---------------- interactive sign preview: the room bar handle ---------------- */
+.sdpv-bar { position: absolute; left: 0; width: 100%; border: 2px dashed var(--navy); cursor: move; touch-action: none; border-radius: 3px; box-sizing: border-box; }
+.sdpv-bar:hover, .sdpv-bar:active { border-style: solid; }
+.sdpv-rz-v { position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%); width: 30px; height: 16px; border-radius: 8px; cursor: ns-resize; background: var(--navy); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
