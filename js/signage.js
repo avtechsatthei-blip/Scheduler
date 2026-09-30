@@ -215,10 +215,13 @@
 
     // --- optional logo + accent rule across the top
     const logoImg = th.logo && Sign._logoCache[th.logo.src];
+    let logoBox = null;
     if (th.logo && logoImg) {
       const natW = logoImg.naturalWidth || logoImg.width, natH = logoImg.naturalHeight || logoImg.height;
       const lw = (th.logo.h * natW) / natH;
-      ctx.drawImage(logoImg, (Sign.W - lw) / 2, th.logo.y, lw, th.logo.h);
+      const lx = th.logo.x != null ? th.logo.x : (Sign.W - lw) / 2; // undragged logos stay centered
+      ctx.drawImage(logoImg, lx, th.logo.y, lw, th.logo.h);
+      logoBox = { x: lx, y: th.logo.y, w: lw, h: th.logo.h };
     }
     if (th.rule) {
       ctx.fillStyle = th.rule.color;
@@ -270,6 +273,7 @@
     if (th.shadow) { ctx.shadowColor = th.shadow; ctx.shadowBlur = 6; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4; }
     ctx.fillText(spec.room || '', 12, 1004 - (132 - rs) * 0.1);
     ctx.shadowColor = 'transparent';
+    if (opts.withLayout) return { canvas, layout: { logo: logoBox, title: { cy, top, bottom: top + lines.length * pitch, size } } };
     return canvas;
   };
 

@@ -3,7 +3,7 @@
   const IH = root.IH, U = IH.U, UI = IH.UI, Store = IH.Store, Sign = IH.Sign;
   const { esc, icon: ic } = UI;
   const JSZIP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-  const mem = (UI.mem.signs = { scope: 'week', day: '', theme: null, showDate: null, merge: true, sel: new Set(), custom: { name: '', room: '', override: null }, current: null });
+  const mem = (UI.mem.signs = { tab: 'signs', scope: 'week', day: '', theme: null, showDate: null, merge: true, sel: new Set(), custom: { name: '', room: '', override: null }, current: null });
 
   const theme = () => mem.theme || Store.state.settings.signTheme || 'classic';
   const showDate = () => (mem.showDate == null ? !!Store.state.settings.signShowDate : mem.showDate);
@@ -51,8 +51,10 @@
   }
 
   UI.Views.signs = {
-    title: 'Room signs',
+    title: 'Signage',
     render() {
+      const tabBar = `<div class="tabs noprint" style="margin-bottom:18px">${[['signs', 'Signs', 'image'], ['designs', 'Designs', 'wand']].map(([k, l, i]) => `<button class="${mem.tab === k ? 'on' : ''}" data-act="signage-tab" data-tab="${k}">${ic(i, 'sm')} ${l}</button>`).join('')}</div>`;
+      if (mem.tab === 'designs') return UI.pageTop('Signage', 'Your sign designs — logos, colors, backgrounds') + tabBar + designsTabHtml();
       const list = entries();
       if (UI.mem.signPick) {
         const hit = list.find((x) => x.ids.includes(UI.mem.signPick));
@@ -61,12 +63,11 @@
         UI.mem.signPick = null;
       }
       if (!mem.current || (!list.find((x) => x.key === mem.current) && mem.current !== '__custom')) mem.current = list[0] ? list[0].key : '__custom';
-      const top = UI.pageTop('Room signs', 'PNG signs for the room screens', `${mem.scope === 'week' && !mem.day ? UI.weekNav() : ''}`);
+      const top = UI.pageTop('Signage', 'PNG signs for the room screens', `${mem.scope === 'week' && !mem.day ? UI.weekNav() : ''}`);
       const selN = list.filter((x) => mem.sel.has(x.key)).length;
-      return top + dayPickerHtml() + `<div class="row wrap noprint" style="margin-bottom:16px;gap:12px">
+      return top + tabBar + dayPickerHtml() + `<div class="row wrap noprint" style="margin-bottom:16px;gap:12px">
           <div class="seg">${[['week', 'This week'], ['all', 'All events']].map(([k, l]) => `<button class="${mem.scope === k && !mem.day ? 'on' : ''}" data-act="sign-scope" data-scope="${k}">${l}</button>`).join('')}</div>
           ${themeSelectHtml()}
-          <button class="btn sm" data-act="sign-manage">${ic('sliders', 'sm')} Manage designs</button>
           <label class="check"><span class="switch"><input type="checkbox" data-change="sign-date" ${showDate() ? 'checked' : ''}><i></i></span> Show date and time</label>
           ${showDate() ? '' : `<label class="check"><span class="switch"><input type="checkbox" data-change="sign-merge" ${mem.merge ? 'checked' : ''}><i></i></span> One sign for multi-day events</label>`}</div>
         <div class="signwrap"><div>
@@ -90,7 +91,45 @@
           <div class="row wrap" style="margin-top:12px;gap:8px"><span class="muted small grow" id="pv-name"></span><button class="btn" data-act="sign-customize" data-key="${esc(mem.current)}">${ic('edit', 'sm')} Customize this sign</button><button class="btn" data-act="sign-bs">${ic('download', 'sm')} BrightSign</button><button class="btn primary" data-act="sign-dl">${ic('download', 'sm')} Download PNG</button></div>
           <div class="small muted" style="margin-top:8px">1920 × 1080 pixels, the size of your example sign. The event name is centered and the room name runs along the bottom bar.</div></div></div>`;
     },
-    mount() { draw(); },
+    mount() { if (mem.tab === 'designs') drawDesignCards(); else draw(); },
+  };
+  UI.Acts['signage-tab'] = (el) => { mem.tab = el.dataset.tab; UI.rerender(); };
+
+  function designsTabHtml() {
+    const st = Store.state;
+    const cards = st.signThemes.map((t) => `<div class="design-card">
+        <div class="design-pv" id="dpv-${t.id}"><div class="ph"></div></div>
+        <div class="design-meta"><b>${esc(t.name)}</b><span class="small muted">${[t.logo ? 'Logo' : '', t.background ? 'Background' : ''].filter(Boolean).join(' · ') || 'Colors only'}</span></div>
+        <div class="row wrap" style="gap:6px;margin-top:10px">
+          <button class="btn xs" type="button" data-act="design-edit" data-id="${t.id}">${ic('edit', 'sm')} Edit</button>
+          <button class="btn xs" type="button" data-act="design-dup" data-id="${t.id}">${ic('copy', 'sm')} Duplicate</button>
+          <button class="btn xs danger" type="button" data-act="design-del" data-id="${t.id}">${ic('trash', 'sm')} Delete</button></div></div>`).join('');
+    return `<div class="design-grid">${cards}<button class="design-card design-new" type="button" data-act="design-new">${ic('plus', 'lg')}<b>New design</b></button></div>
+      ${st.signThemes.length ? '' : '<p class="muted small" style="margin-top:12px">No saved designs yet — click New design to upload a logo, match colors to it, and fine-tune the rest.</p>'}`;
+  }
+  async function drawDesignCards() {
+    const st = Store.state;
+    for (const t of st.signThemes) {
+      await Sign.preload(t);
+      const canvas = Sign.render({ name: 'Sample Event Name', room: 'Sample Room' }, { theme: t, showDate: false });
+      const host = UI.$(`#dpv-${t.id}`);
+      if (host) { host.innerHTML = ''; host.appendChild(canvas); }
+    }
+  }
+  UI.Acts['design-new'] = () => IH.SignDesigner.openLibraryEditor(null, () => UI.rerender());
+  UI.Acts['design-edit'] = (el) => { const t = Store.state.signThemes.find((x) => x.id === el.dataset.id); if (t) IH.SignDesigner.openLibraryEditor(t, () => UI.rerender()); };
+  UI.Acts['design-dup'] = (el) => {
+    const t = Store.state.signThemes.find((x) => x.id === el.dataset.id);
+    if (!t) return;
+    const copy = Store.laySignTheme(Store.newSignTheme(Object.assign(U.clone(t), { id: undefined, name: t.name + ' copy' })));
+    Store.update((s) => { s.signThemes.push(copy); });
+    UI.toast('Design duplicated', 'ok');
+    UI.rerender();
+  };
+  UI.Acts['design-del'] = async (el) => {
+    const t = Store.state.signThemes.find((x) => x.id === el.dataset.id);
+    if (!t || !IH.SignDesigner.confirmDelete) return;
+    if (await IH.SignDesigner.confirmDelete(t)) UI.rerender();
   };
 
   function current() {
@@ -125,7 +164,6 @@
   UI.Acts['sign-day-tomorrow'] = () => { mem.day = mem.day === U.addDays(U.today(), 1) ? '' : U.addDays(U.today(), 1); UI.rerender(); };
   UI.Acts['sign-day-clear'] = () => { mem.day = ''; UI.rerender(); };
   UI.Changes['sign-theme'] = (el) => { mem.theme = el.value; UI.rerender(); };
-  UI.Acts['sign-manage'] = () => IH.SignDesigner.openManager(() => UI.rerender());
   UI.Changes['sign-date'] = (el) => { mem.showDate = el.checked; UI.rerender(); };
   UI.Changes['sign-merge'] = (el) => { mem.merge = el.checked; mem.sel.clear(); UI.rerender(); };
   UI.Changes['sign-check'] = (el) => { if (el.checked) mem.sel.add(el.dataset.key); else mem.sel.delete(el.dataset.key); UI.rerender(); };

@@ -461,3 +461,24 @@ kbd { background: #fff; border: 1px solid var(--line); border-bottom-width: 2px;
 .crop-h[data-corner="tr"] { right: -8px; top: -8px; cursor: nesw-resize; }
 .crop-h[data-corner="bl"] { left: -8px; bottom: -8px; cursor: nesw-resize; }
 .crop-h[data-corner="br"] { right: -8px; bottom: -8px; cursor: nwse-resize; }
+
+/* ---------------- interactive sign preview: drag-to-move, drag-corner-to-resize ---------------- */
+.sdpv { position: relative; overflow: visible; touch-action: none; }
+.sdpv-logo { position: absolute; border: 2px dashed var(--orange); cursor: move; touch-action: none; border-radius: 3px; }
+.sdpv-logo:hover, .sdpv-logo:active { border-style: solid; }
+.sdpv-rz { position: absolute; right: -8px; bottom: -8px; width: 16px; height: 16px; background: var(--orange); border: 2px solid #fff; border-radius: 50%; cursor: nwse-resize; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
+.sdpv-text { position: absolute; left: 0; width: 100%; cursor: move; touch-action: none; display: flex; align-items: center; justify-content: center; }
+.sdpv-text::before { content: ''; position: absolute; inset: 0; border: 2px dashed transparent; border-radius: 3px; transition: border-color 0.15s; }
+.sdpv-text:hover::before, .sdpv-text:active::before { border-color: rgba(16, 41, 75, 0.45); }
+.sdpv-grip { opacity: 0; background: var(--navy); color: #fff; border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); transition: opacity 0.15s; }
+.sdpv-text:hover .sdpv-grip, .sdpv-text:active .sdpv-grip { opacity: 1; }
+
+/* ---------------- signage design suite: the Designs tab grid ---------------- */
+.design-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+.design-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px; box-shadow: var(--shadow); }
+.design-pv { border-radius: 8px; overflow: hidden; background: #f4f1eb; aspect-ratio: 16/9; }
+.design-pv canvas { display: block; width: 100%; height: auto; }
+.design-pv .ph { width: 100%; height: 100%; }
+.design-meta { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+.design-new { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 168px; border: 1.5px dashed var(--line); background: #fbfaf7; color: var(--navy); cursor: pointer; font-weight: 700; }
+.design-new:hover { border-color: var(--orange); color: var(--orange-d); }

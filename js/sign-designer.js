@@ -48,7 +48,12 @@
         ${UI.field('Text size', `<input class="in sm num" type="number" min="24" max="220" step="2" id="sd-text-size" value="${th.titleSize || 144}" style="max-width:84px">`, 'Largest it will print, px')}
         ${UI.field('Text position', `<input class="in sm num" type="number" min="80" max="850" step="2" id="sd-text-y" value="${th.titleCy != null ? th.titleCy : 488}" style="max-width:84px">`, 'Vertical center, px from the top')}
       </div>
-      <div class="preview" id="sd-preview" style="margin-top:14px;max-width:420px"></div>
+      <div class="preview sdpv" id="sd-preview" style="margin-top:14px;max-width:420px">
+        <div id="sd-canvas-host"></div>
+        <div class="sdpv-logo hide" id="sd-logo-handle" title="Drag to move"><span class="sdpv-rz" title="Drag to resize"></span></div>
+        <div class="sdpv-text" id="sd-text-handle" title="Drag to move the text"><span class="sdpv-grip">${ic('move', 'sm')}</span></div>
+      </div>
+      <div class="small muted" style="margin-top:6px">Drag the logo or the text on the preview to reposition; drag the logo's corner to resize (its shape always stays locked).</div>
     </div>`;
   }
 
@@ -63,10 +68,73 @@
     };
     async function redraw() {
       await Sign.preload(th);
-      const canvas = Sign.render(sample(), { theme: th, showDate: false });
-      const box = UI.$('#sd-preview', el);
-      if (box) { box.innerHTML = ''; box.appendChild(canvas); }
+      const { canvas, layout } = Sign.render(sample(), { theme: th, showDate: false, withLayout: true });
+      const host = UI.$('#sd-canvas-host', el);
+      if (host) { host.innerHTML = ''; host.appendChild(canvas); }
+      positionHandles(layout);
     }
+    function curLogoW() {
+      const img = th.logo && Sign._logoCache[th.logo.src];
+      if (!img) return 0;
+      const natW = img.naturalWidth || img.width, natH = img.naturalHeight || img.height;
+      return (th.logo.h * natW) / natH;
+    }
+    function scaleFactor() {
+      const canvas = UI.$('#sd-canvas-host canvas', el);
+      return canvas && canvas.clientWidth ? canvas.clientWidth / Sign.W : (UI.$('#sd-preview', el).clientWidth || 420) / Sign.W;
+    }
+    function positionHandles(layout) {
+      const scale = scaleFactor();
+      const lh = UI.$('#sd-logo-handle', el);
+      if (layout.logo) {
+        lh.classList.remove('hide');
+        lh.style.left = layout.logo.x * scale + 'px'; lh.style.top = layout.logo.y * scale + 'px';
+        lh.style.width = layout.logo.w * scale + 'px'; lh.style.height = layout.logo.h * scale + 'px';
+      } else lh.classList.add('hide');
+      const tx = UI.$('#sd-text-handle', el);
+      if (layout.title) {
+        const h = Math.max(28, (layout.title.bottom - layout.title.top) * scale);
+        tx.style.top = layout.title.top * scale + 'px'; tx.style.height = h + 'px';
+      }
+    }
+    // A drag-to-move (and, for the logo, drag-corner-to-resize, aspect locked) handle on the live sign
+    // preview. `onMove(dx, dy, resizing)` gets deltas already converted from screen px to sign px.
+    function wireDrag(handleEl, onMove) {
+      let dragging = null;
+      handleEl.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const scale = scaleFactor();
+        dragging = { x0: e.clientX, y0: e.clientY, scale, resizing: !!e.target.closest('.sdpv-rz') };
+        if (handleEl.setPointerCapture) handleEl.setPointerCapture(e.pointerId);
+      });
+      handleEl.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const dx = (e.clientX - dragging.x0) / dragging.scale, dy = (e.clientY - dragging.y0) / dragging.scale;
+        onMove(dx, dy, dragging.resizing);
+        dragging.x0 = e.clientX; dragging.y0 = e.clientY; // incremental, so a mid-drag h/w change doesn't jump
+      });
+      const end = () => { dragging = null; };
+      handleEl.addEventListener('pointerup', end);
+      handleEl.addEventListener('pointercancel', end);
+    }
+    wireDrag(UI.$('#sd-logo-handle', el), (dx, dy, resizing) => {
+      if (!th.logo) return;
+      if (resizing) th.logo.h = Math.max(20, th.logo.h + dy);
+      else {
+        th.logo.x = Math.max(0, Math.min(Sign.W - curLogoW(), (th.logo.x != null ? th.logo.x : (Sign.W - curLogoW()) / 2) + dx));
+        th.logo.y = Math.max(0, Math.min(Sign.H - th.logo.h, th.logo.y + dy));
+      }
+      const hInput = UI.$('#sd-logo-h', el); if (hInput) hInput.value = Math.round(th.logo.h);
+      const yInput = UI.$('#sd-logo-y', el); if (yInput) yInput.value = Math.round(th.logo.y);
+      onDirty && onDirty();
+      redraw();
+    });
+    wireDrag(UI.$('#sd-text-handle', el), (dx, dy) => {
+      th.titleCy = Math.max(0, Math.min(Sign.H, (th.titleCy != null ? th.titleCy : 488) + dy));
+      const tyInput = UI.$('#sd-text-y', el); if (tyInput) tyInput.value = Math.round(th.titleCy);
+      onDirty && onDirty();
+      redraw();
+    });
     function setColor(role, hex) {
       th[role] = hex;
       Store.laySignTheme(th); // keeps the accent rule's color following the strip
@@ -98,7 +166,7 @@
         const hadLogo = !!th.logo;
         const src = await U.fileToDataURL(f);
         const img = await U.loadImage(src);
-        th.logo = { src, origSrc: src, h: hadLogo ? th.logo.h : 132, y: hadLogo ? th.logo.y : 62 }; // keep size/position when just swapping the image; a fresh upload always starts uncropped
+        th.logo = { src, origSrc: src, h: hadLogo ? th.logo.h : 132, y: hadLogo ? th.logo.y : 62, x: hadLogo ? th.logo.x : undefined }; // keep size/position when just swapping the image; a fresh upload always starts uncropped and centered
         Store.layoutForLogo(th, hadLogo);
         Sign._logoCache[src] = img;
         const palette = Sign.extractPalette(img);
@@ -259,7 +327,8 @@
   SD.wireFields = wire;
 
   /* ---------------- library: create / edit a saved design ---------------- */
-  SD.openLibraryEditor = (existing) => {
+  SD.openLibraryEditor = (existing, onSaved) => {
+    SD._onSaved = onSaved || null;
     const isNew = !existing;
     const th = existing ? U.clone(existing) : Store.laySignTheme(Store.newSignTheme({ name: '' }));
     Sign.preload(th); // pick up the logo image into the cache before the first draw, if editing
@@ -282,15 +351,7 @@
     if (SD._onSaved) SD._onSaved(th);
   }
   async function del(m, th) {
-    const used = countUses(th.id);
-    if (!(await UI.confirm({ title: `Delete "${esc(th.name)}"?`, message: used ? `${UI.plural(used, 'sign')} using this design will fall back to the shared theme.` : 'This design is not currently used by any sign.', ok: 'Delete', danger: true }))) return false;
-    Store.update((s) => {
-      s.signThemes = s.signThemes.filter((x) => x.id !== th.id);
-      const key = `custom:${th.id}`;
-      s.events.forEach((e) => { if (e.signOverride && e.signOverride.themeKey === key) delete e.signOverride.themeKey; });
-      if (s.settings.signTheme === key) s.settings.signTheme = 'brand';
-    });
-    UI.toast('Design deleted', 'ok');
+    if (!(await SD.confirmDelete(th))) return false;
     if (SD._onSaved) SD._onSaved(null);
   }
   function countUses(id) {
@@ -298,44 +359,19 @@
     const st = Store.state;
     return (st.settings.signTheme === key ? 1 : 0) + st.events.filter((e) => e.signOverride && e.signOverride.themeKey === key).length;
   }
-
-  /* ---------------- library manager: list, used from Settings and Room signs ---------------- */
-  SD.openManager = (onChange) => {
-    SD._onSaved = () => { m.close(); SD.openManager(onChange); if (onChange) onChange(); };
-    const st = Store.state;
-    const rows = st.signThemes.length
-      ? st.signThemes.map((t) => `<div class="themerow"><span class="dot" style="background:${esc(t.bar)}"></span><div class="grow"><b>${esc(t.name)}</b>${t.logo ? '' : '<span class="muted small"> · no logo</span>'}</div>
-          <button class="btn ghost icon sm" data-act="sdm-edit" data-id="${t.id}" title="Edit">${ic('edit', 'sm')}</button>
-          <button class="btn ghost icon sm" data-act="sdm-dup" data-id="${t.id}" title="Duplicate">${ic('copy', 'sm')}</button>
-          <button class="btn ghost icon sm danger" data-act="sdm-del" data-id="${t.id}" title="Delete">${ic('trash', 'sm')}</button></div>`).join('')
-      : '<div class="muted small" style="padding:8px 0">No saved designs yet. Upload a logo and match colors to make one.</div>';
-    const m = UI.modal({
-      title: 'Sign designs', narrow: true,
-      body: `<div class="col" style="gap:2px">${rows}</div>`,
-      actions: [{ label: 'Close' }, { label: 'New design', cls: 'primary', icon: 'plus', run: () => { m.close(); SD.openLibraryEditor(null); } }],
-      onClose: () => { SD._onSaved = null; if (onChange) onChange(); },
+  // Confirm + delete a saved design, cleaning up anything that pointed at it (falls back to "brand").
+  // Usable from anywhere — the library editor's own Delete button, or a design card's Delete action.
+  SD.confirmDelete = async (t) => {
+    const used = countUses(t.id);
+    if (!(await UI.confirm({ title: `Delete "${esc(t.name)}"?`, message: used ? `${UI.plural(used, 'sign')} using this design will fall back to the shared theme.` : 'This design is not currently used by any sign.', ok: 'Delete', danger: true }))) return false;
+    Store.update((s) => {
+      s.signThemes = s.signThemes.filter((x) => x.id !== t.id);
+      const key = `custom:${t.id}`;
+      s.events.forEach((e) => { if (e.signOverride && e.signOverride.themeKey === key) delete e.signOverride.themeKey; });
+      if (s.settings.signTheme === key) s.settings.signTheme = 'brand';
     });
-    UI.Acts['sdm-edit'] = (el) => { const t = Store.state.signThemes.find((x) => x.id === el.dataset.id); m.close(); if (t) SD.openLibraryEditor(t); };
-    UI.Acts['sdm-dup'] = (el) => {
-      const t = Store.state.signThemes.find((x) => x.id === el.dataset.id);
-      if (!t) return;
-      const copy = Store.laySignTheme(Store.newSignTheme(Object.assign(U.clone(t), { id: undefined, name: t.name + ' copy' })));
-      Store.update((s) => { s.signThemes.push(copy); });
-      m.close(); SD.openManager(onChange);
-    };
-    UI.Acts['sdm-del'] = async (el) => {
-      const t = Store.state.signThemes.find((x) => x.id === el.dataset.id);
-      if (!t) return;
-      const used = countUses(t.id);
-      if (!(await UI.confirm({ title: `Delete "${esc(t.name)}"?`, message: used ? `${UI.plural(used, 'sign')} using this design will fall back to the shared theme.` : 'This design is not currently used by any sign.', ok: 'Delete', danger: true }))) return;
-      Store.update((s) => {
-        s.signThemes = s.signThemes.filter((x) => x.id !== t.id);
-        const key = `custom:${t.id}`;
-        s.events.forEach((e) => { if (e.signOverride && e.signOverride.themeKey === key) delete e.signOverride.themeKey; });
-        if (s.settings.signTheme === key) s.settings.signTheme = 'brand';
-      });
-      m.close(); SD.openManager(onChange);
-    };
+    UI.toast('Design deleted', 'ok');
+    return true;
   };
 
   /* ---------------- per-sign editor: customize one sign only ---------------- */
