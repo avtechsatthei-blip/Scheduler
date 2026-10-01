@@ -54,13 +54,18 @@
     return durl.slice(durl.indexOf(',') + 1);
   }
 
-  // canvas: the rendered 1920x1080 sign. name: base file name WITHOUT extension (BrightSign convention
-  // in the reference file is an uppercase .PNG). folder: where the PNG will live, e.g. from Settings.
+  // canvas: the rendered 1920x1080 sign. name: base file name WITHOUT extension. folder: where the PNG
+  // will live, e.g. from Settings. The extension is lowercase .png here to exactly match Sign.filename()
+  // (the plain "Download PNG" button) — BrightAuthor:connected's publish step failed to load the asset
+  // when the bpfx referenced a differently-cased extension (.PNG) than the real file on disk (.png); a
+  // real asset added through BrightAuthor's own "Add Media" confirmed it always uses the file's own
+  // on-disk case, lowercase in this case. Keeping every one of our own outputs on the same lowercase
+  // .png avoids that mismatch regardless of which combination of buttons is used to get the file there.
   BS.build = async (canvas, name, folder, opts) => {
     opts = opts || {};
     const pngBlob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
     const pngBytes = new Uint8Array(await pngBlob.arrayBuffer());
-    const filename = `${name}.PNG`;
+    const filename = `${name}.png`;
     folder = BS.normFolder(folder);
 
     const doc = JSON.parse(JSON.stringify(TEMPLATE)); // deep clone; only touch content-specific fields below
